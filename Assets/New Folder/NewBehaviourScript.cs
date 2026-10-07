@@ -1,12 +1,11 @@
 ﻿using UnityEngine;
-#if ENABLE_INPUT_SYSTEM
-using UnityEngine.InputSystem;
-#endif
+using Fusion;
 
 public class NewBehaviourScript : MonoBehaviour
 {
     public float moveSpeed = 6.0f;
     public float lookSpeed = 2.0f;
+    public NetworkPrefabRef markerNetworkPrefab;
 
     private float yaw = 0.0f;
     private float pitch = 25.0f;
@@ -20,7 +19,7 @@ public class NewBehaviourScript : MonoBehaviour
 
     void Update()
     {
-        // মাউস দিয়ে চারপাশে ঘোরানো (রাইট ক্লিক চেপে ড্র্যাগ করলে)
+        // মাউসের রাইট-ক্লিক দিয়ে ভিউ ঘোরানো
         Vector3 currentMousePos = Input.mousePosition;
 
         if (Input.GetMouseButtonDown(1))
@@ -38,9 +37,8 @@ public class NewBehaviourScript : MonoBehaviour
             lastMousePos = currentMousePos;
         }
 
-        // কিবোর্ডের তীরচিহ্ন (Arrow Keys) বা W,A,S,D দিয়ে মুভমেন্ট
+        // কিবোর্ড মুভমেন্ট
         Vector3 move = Vector3.zero;
-
         if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) move += transform.forward;
         if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) move -= transform.forward;
         if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) move += transform.right;
@@ -49,5 +47,26 @@ public class NewBehaviourScript : MonoBehaviour
         if (Input.GetKey(KeyCode.Q) || Input.GetKey(KeyCode.LeftShift)) move += Vector3.down;
 
         transform.position += move.normalized * moveSpeed * Time.deltaTime;
+
+        // মাউসের লেফট-ক্লিকে নেটওয়ার্ক মার্কার স্পন করা
+        if (Input.GetMouseButtonDown(0))
+        {
+            SpawnNetworkMarker();
+        }
+    }
+
+    void SpawnNetworkMarker()
+    {
+        Ray ray = GetComponent<Camera>().ScreenPointToRay(Input.mousePosition);
+        RaycastHit hit;
+
+        if (Physics.Raycast(ray, out hit))
+        {
+            NetworkRunner runner = FindObjectOfType<NetworkRunner>();
+            if (runner != null && runner.IsRunning && markerNetworkPrefab.IsValid)
+            {
+                runner.Spawn(markerNetworkPrefab, hit.point + hit.normal * 0.05f, Quaternion.LookRotation(hit.normal));
+            }
+        }
     }
 }

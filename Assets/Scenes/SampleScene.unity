@@ -947,6 +947,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   moveSpeed: 5
   lookSpeed: 2
+  markerNetworkPrefab:
+    RawGuidValue: d6c6038bd5c1f4d4aa1396ef2aecbed5
 --- !u!1 &151510397
 GameObject:
   m_ObjectHideFlags: 0
@@ -12922,7 +12924,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 1.02e-43, y: 3e-45, z: 1.9236e-41, w: 0}
+  m_BoundingSphereOverride: {x: 1.02e-43, y: 1.4e-44, z: 1.757e-41, w: 0}
   m_UseBoundingSphereOverride: 0
   m_UseViewFrustumForShadowCasterCull: 1
   m_ShadowRadius: 0
