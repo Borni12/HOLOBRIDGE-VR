@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using Fusion;
 
 public class VRPlayerController : NetworkBehaviour
@@ -16,22 +16,32 @@ public class VRPlayerController : NetworkBehaviour
     {
         if (HasStateAuthority)
         {
-            Camera mainCam = Camera.main;
+         
+            Camera mainCam = Camera.main;
             if (mainCam != null)
             {
                 vrCamera = mainCam.transform;
             }
 
-            GameObject leftHand = GameObject.Find("Left Controller") ?? GameObject.Find("LeftHand Controller");
-            if (leftHand != null)
+            
+            GameObject leftObj = GameObject.Find("XR Origin (XR Rig)/Camera Offset/Left Controller");
+            if (leftObj != null)
             {
-                vrLeftController = leftHand.transform;
+                vrLeftController = leftObj.transform;
+            }
+            else
+            {
+                vrLeftController = GameObject.Find("Left Controller")?.transform;
             }
 
-            GameObject rightHand = GameObject.Find("Right Controller") ?? GameObject.Find("RightHand Controller");
-            if (rightHand != null)
+            GameObject rightObj = GameObject.Find("XR Origin (XR Rig)/Camera Offset/Right Controller");
+            if (rightObj != null)
             {
-                vrRightController = rightHand.transform;
+                vrRightController = rightObj.transform;
+            }
+            else
+            {
+                vrRightController = GameObject.Find("Right Controller")?.transform;
             }
         }
     }
@@ -40,19 +50,22 @@ public class VRPlayerController : NetworkBehaviour
     {
         if (HasStateAuthority)
         {
-            if (vrCamera != null && headVisual != null)
+            
+            if (vrCamera != null && headVisual != null)
             {
                 headVisual.position = vrCamera.position;
                 headVisual.rotation = vrCamera.rotation;
             }
 
-            if (vrLeftController != null && leftHandVisual != null)
+           
+            if (vrLeftController != null && leftHandVisual != null)
             {
                 leftHandVisual.position = vrLeftController.position;
                 leftHandVisual.rotation = vrLeftController.rotation;
             }
 
-            if (vrRightController != null && rightHandVisual != null)
+            
+            if (vrRightController != null && rightHandVisual != null)
             {
                 rightHandVisual.position = vrRightController.position;
                 rightHandVisual.rotation = vrRightController.rotation;

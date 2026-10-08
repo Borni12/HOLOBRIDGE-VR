@@ -1,15 +1,18 @@
-using UnityEngine;
+﻿using UnityEngine;
 using Fusion;
 
 public class PlayerSpawner : SimulationBehaviour, IPlayerJoined
 {
+    [Header("Network Prefab")]
     public NetworkPrefabRef playerNetworkPrefab;
 
     public void PlayerJoined(PlayerRef player)
     {
         if (player == Runner.LocalPlayer)
         {
-            Runner.Spawn(playerNetworkPrefab, new Vector3(0, 1, 0), Quaternion.identity, player);
+            
+            Vector3 spawnPos = new Vector3(Random.Range(-1.5f, 1.5f), 1f, Random.Range(-1.5f, 1.5f));
+            Runner.Spawn(playerNetworkPrefab, spawnPos, Quaternion.identity, player);
         }
     }
 }
