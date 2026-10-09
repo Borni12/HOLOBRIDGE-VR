@@ -5224,6 +5224,7 @@ GameObject:
   - component: {fileID: 648696740}
   - component: {fileID: 648696739}
   - component: {fileID: 648696741}
+  - component: {fileID: 648696742}
   m_Layer: 0
   m_Name: NetworkRunner
   m_TagString: Untagged
@@ -5390,6 +5391,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   playerNetworkPrefab:
     RawGuidValue: 2c4d6ef66c586ee43a0ebb985d606875l
+--- !u!114 &648696742
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 648696734}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b8edbe7108d8a43ab838cf8b8d9453df, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Fusion.Unity::Fusion.RunnerEnableVisibility
 --- !u!1001 &652124635
 PrefabInstance:
   m_ObjectHideFlags: 0
