@@ -1,24 +1,17 @@
-name: Build Quest Standalone APK
+name: Build Quest APK
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build APK for Meta Quest
+    name: Build Android APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           lfs: true
-
-      - name: Cache Library
-        uses: actions/cache@v3
-        with:
-          path: Library
-          key: Library-Quest-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
-          restore-keys: Library-Quest-
 
       - name: Build Android APK
         uses: game-ci/unity-builder@v4
