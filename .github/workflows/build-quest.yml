@@ -18,8 +18,7 @@ jobs:
         with:
           path: Library
           key: Library-Quest-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
-          restore-keys: |
-            Library-Quest-
+          restore-keys: Library-Quest-
 
       - name: Build Android APK
         uses: game-ci/unity-builder@v4
