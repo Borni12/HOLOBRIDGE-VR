@@ -1,0 +1,39 @@
+name: Build Quest Standalone APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build APK for Meta Quest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Library
+        uses: actions/cache@v3
+        with:
+          path: Library
+          key: Library-Quest-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-Quest-
+
+      - name: Build Android APK
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: Android
+          buildName: HoloBridge_Quest
+          buildsPath: build
+
+      - name: Upload Quest APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: HoloBridge-Quest-APK
+          path: build/Android/HoloBridge_Quest.apk
