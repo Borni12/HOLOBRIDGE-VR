@@ -219,7 +219,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d781fe4fcf99a4040a089c18ce9697ce, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SpatialDrawingManager
-  strokePrefab: {fileID: 0}
+  strokePrefab: {fileID: 2633701258843882549, guid: d0d9973910f1c8a4fbc84de77aabaa7f, type: 3}
   minVertexDistance: 0.02
   drawDistance: 1.5
 --- !u!1 &6069585579651068352
