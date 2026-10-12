@@ -120,7 +120,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1396414800477501887}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 7223004129632640737}
+        m_TargetAssemblyTypeName: SpatialDrawingManager, Assembly-CSharp
+        m_MethodName: SetColorRed
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!1 &632775693452146229
 GameObject:
   m_ObjectHideFlags: 0
@@ -378,7 +390,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 2256846755761631404}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 7223004129632640737}
+        m_TargetAssemblyTypeName: SpatialDrawingManager, Assembly-CSharp
+        m_MethodName: SetColorYellow
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!1 &1197890546547824831
 GameObject:
   m_ObjectHideFlags: 0
@@ -983,6 +1007,7 @@ MonoBehaviour:
   strokePrefab: {fileID: 2633701258843882549, guid: d0d9973910f1c8a4fbc84de77aabaa7f, type: 3}
   minVertexDistance: 0.02
   drawDistance: 1.5
+  currentColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!1 &4885714572038726911
 GameObject:
   m_ObjectHideFlags: 0
@@ -1494,7 +1519,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 6790648688850386361}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 7223004129632640737}
+        m_TargetAssemblyTypeName: SpatialDrawingManager, Assembly-CSharp
+        m_MethodName: SetColorBlue
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!1 &8685958233453482125
 GameObject:
   m_ObjectHideFlags: 0

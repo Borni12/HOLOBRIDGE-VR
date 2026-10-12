@@ -1,5 +1,4 @@
-﻿
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.InputSystem;
 using System.Collections.Generic;
 
@@ -10,8 +9,8 @@ public class SpatialDrawingManager : MonoBehaviour
     [SerializeField] private float minVertexDistance = 0.02f;
     [SerializeField] private float drawDistance = 1.0f;
 
-    // ডিফল্ট সলিড লাল
-    private Color currentColor = Color.red;
+    [Header("Brush Settings")]
+    [SerializeField] private Color currentColor = Color.red;
 
     private LineRenderer currentLine;
     private List<Vector3> pointBuffer = new List<Vector3>();
@@ -54,37 +53,43 @@ public class SpatialDrawingManager : MonoBehaviour
             key3 = Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3);
         }
 
-        if (key1) { currentColor = Color.red; Debug.Log("Selected Solid Red"); }
-        if (key2) { currentColor = Color.green; Debug.Log("Selected Solid Green"); }
-        if (key3) { currentColor = Color.blue; Debug.Log("Selected Solid Blue"); }
+        if (key1) SetColorRed();
+        if (key2) SetColorYellow();
+        if (key3) SetColorBlue();
 
-        // ২. F কী চেপে ড্রয়িং
-        bool fPressed = false;
-        bool fHeld = false;
-        bool fReleased = false;
+        // ২. F কী চেপে অথবা মাউসের লেফট ক্লিক দিয়ে ড্রয়িং
+        bool drawPressed = false;
+        bool drawHeld = false;
+        bool drawReleased = false;
 
         if (Keyboard.current != null)
         {
-            fPressed = Keyboard.current.fKey.wasPressedThisFrame;
-            fHeld = Keyboard.current.fKey.isPressed;
-            fReleased = Keyboard.current.fKey.wasReleasedThisFrame;
+            drawPressed = Keyboard.current.fKey.wasPressedThisFrame;
+            drawHeld = Keyboard.current.fKey.isPressed;
+            drawReleased = Keyboard.current.fKey.wasReleasedThisFrame;
         }
         else
         {
-            fPressed = Input.GetKeyDown(KeyCode.F);
-            fHeld = Input.GetKey(KeyCode.F);
-            fReleased = Input.GetKeyUp(KeyCode.F);
+            drawPressed = Input.GetKeyDown(KeyCode.F);
+            drawHeld = Input.GetKey(KeyCode.F);
+            drawReleased = Input.GetKeyUp(KeyCode.F);
         }
 
-        if (fPressed) StartDrawing();
-        else if (fHeld && isDrawing) UpdateDrawing();
-        else if (fReleased && isDrawing) StopDrawing();
+        if (drawPressed) StartDrawing();
+        else if (drawHeld && isDrawing) UpdateDrawing();
+        else if (drawReleased && isDrawing) StopDrawing();
 
-        // ৩. C কী চাপলে একটি একটি করে শেষ দাগ মুছবে
+        // ৩. কিবোর্ডের C চেপে Undo এবং X চেপে Clear All
         bool cPressed = (Keyboard.current != null && Keyboard.current.cKey.wasPressedThisFrame) || Input.GetKeyDown(KeyCode.C);
         if (cPressed)
         {
             RemoveLastStroke();
+        }
+
+        bool xPressed = (Keyboard.current != null && Keyboard.current.xKey.wasPressedThisFrame) || Input.GetKeyDown(KeyCode.X);
+        if (xPressed)
+        {
+            ClearAllStrokes();
         }
     }
 
@@ -112,13 +117,13 @@ public class SpatialDrawingManager : MonoBehaviour
         {
             currentLine.useWorldSpace = true;
 
-            // মেটেরিয়ালের প্রিফ্যাব লক ভাঙতে নতুন ইনস্ট্যান্স তৈরি ও কালার পাস
+            // মেটেরিয়াল ইন্সট্যান্স তৈরি ও কালার পাস
             Material lineMat = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
             lineMat.color = currentColor;
             lineMat.SetColor("_BaseColor", currentColor);
             currentLine.material = lineMat;
 
-            // LineRenderer-এর নিজস্ব কালার সেট
+            // LineRenderer কালার সেট
             currentLine.startColor = currentColor;
             currentLine.endColor = currentColor;
 
@@ -152,6 +157,28 @@ public class SpatialDrawingManager : MonoBehaviour
         pointBuffer.Clear();
     }
 
+    // -------------------------------------------------------------
+    // 3D UI Hand Menu বাটনগুলোর সাথে যুক্ত করার মেথডসমূহ
+    // -------------------------------------------------------------
+
+    public void SetColorRed()
+    {
+        currentColor = Color.red;
+        Debug.Log("Spatial UI: Selected Color Red");
+    }
+
+    public void SetColorYellow()
+    {
+        currentColor = Color.yellow;
+        Debug.Log("Spatial UI: Selected Color Yellow");
+    }
+
+    public void SetColorBlue()
+    {
+        currentColor = new Color(0f, 0.7f, 1f); // Neon Cyan / Blue
+        Debug.Log("Spatial UI: Selected Color Blue");
+    }
+
     public void RemoveLastStroke()
     {
         if (spawnedStrokes.Count > 0)
@@ -163,7 +190,21 @@ public class SpatialDrawingManager : MonoBehaviour
             if (lastStroke != null)
             {
                 Destroy(lastStroke);
+                Debug.Log("Spatial UI: Undo Last Stroke");
             }
         }
+    }
+
+    public void ClearAllStrokes()
+    {
+        foreach (var stroke in spawnedStrokes)
+        {
+            if (stroke != null)
+            {
+                Destroy(stroke);
+            }
+        }
+        spawnedStrokes.Clear();
+        Debug.Log("Spatial UI: Cleared All Strokes");
     }
 }

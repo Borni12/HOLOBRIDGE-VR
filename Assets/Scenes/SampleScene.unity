@@ -1530,6 +1530,7 @@ MonoBehaviour:
   strokePrefab: {fileID: 2633701258843882549, guid: d0d9973910f1c8a4fbc84de77aabaa7f, type: 3}
   minVertexDistance: 0.02
   drawDistance: 1.5
+  currentColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!1 &192135050
 GameObject:
   m_ObjectHideFlags: 0
