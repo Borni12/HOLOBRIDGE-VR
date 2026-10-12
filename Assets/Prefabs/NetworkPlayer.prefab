@@ -184,7 +184,7 @@ MonoBehaviour:
   SortKey: 3731495881
   SendPriority: 1
   EnableInterpolation: 1
-  Flags: 262146
+  Flags: 2
   NestedObjects: []
   NetworkedBehaviours:
   - {fileID: 1487306481632756981}
@@ -220,7 +220,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SpatialDrawingManager
   strokePrefab: {fileID: 0}
-  drawPoint: {fileID: 5763243186483590264}
   minVertexDistance: 0.02
   drawDistance: 1.5
 --- !u!1 &6069585579651068352
