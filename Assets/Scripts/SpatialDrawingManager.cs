@@ -1,22 +1,24 @@
 ﻿using UnityEngine;
 using UnityEngine.InputSystem;
 using System.Collections.Generic;
+using Fusion;
 
-public class SpatialDrawingManager : MonoBehaviour
+public class SpatialDrawingManager : NetworkBehaviour
 {
     [Header("Drawing Configuration")]
-    [SerializeField] private GameObject strokePrefab;
+    [SerializeField] private NetworkPrefabRef strokePrefab;
     [SerializeField] private float minVertexDistance = 0.02f;
     [SerializeField] private float drawDistance = 1.0f;
 
     [Header("Brush Settings")]
     [SerializeField] private Color currentColor = Color.red;
 
+    private NetworkObject currentNetworkStroke;
     private LineRenderer currentLine;
     private List<Vector3> pointBuffer = new List<Vector3>();
     private bool isDrawing = false;
     private Camera activeCam;
-    private List<GameObject> spawnedStrokes = new List<GameObject>();
+    private List<NetworkObject> spawnedStrokes = new List<NetworkObject>();
 
     void Start()
     {
@@ -57,7 +59,7 @@ public class SpatialDrawingManager : MonoBehaviour
         if (key2) SetColorYellow();
         if (key3) SetColorBlue();
 
-        // ২. F কী চেপে অথবা মাউসের লেফট ক্লিক দিয়ে ড্রয়িং
+        // ২. F কী চেপে অথবা মাউস দিয়ে ড্রয়িং
         bool drawPressed = false;
         bool drawHeld = false;
         bool drawReleased = false;
@@ -105,33 +107,32 @@ public class SpatialDrawingManager : MonoBehaviour
 
     public void StartDrawing()
     {
-        if (strokePrefab == null) return;
         FindCam();
-
         Vector3 spawnPos = GetDrawPoint();
-        GameObject strokeObj = Instantiate(strokePrefab, Vector3.zero, Quaternion.identity);
-        spawnedStrokes.Add(strokeObj);
 
-        currentLine = strokeObj.GetComponent<LineRenderer>();
-        if (currentLine != null)
+        // লোকাল Instantiate এর বদলে ফিউশন স্পন কল
+        if (Runner != null)
         {
-            currentLine.useWorldSpace = true;
+            currentNetworkStroke = Runner.Spawn(strokePrefab, spawnPos, Quaternion.identity, Runner.LocalPlayer);
+            if (currentNetworkStroke != null)
+            {
+                spawnedStrokes.Add(currentNetworkStroke);
+                currentLine = currentNetworkStroke.GetComponent<LineRenderer>();
 
-            // মেটেরিয়াল ইন্সট্যান্স তৈরি ও কালার পাস
-            Material lineMat = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
-            lineMat.color = currentColor;
-            lineMat.SetColor("_BaseColor", currentColor);
-            currentLine.material = lineMat;
+                if (currentLine != null)
+                {
+                    currentLine.useWorldSpace = true;
+                    pointBuffer.Clear();
+                    pointBuffer.Add(spawnPos);
+                    pointBuffer.Add(spawnPos + Vector3.up * 0.005f);
 
-            // LineRenderer কালার সেট
-            currentLine.startColor = currentColor;
-            currentLine.endColor = currentColor;
+                    currentLine.positionCount = 2;
+                    currentLine.SetPositions(pointBuffer.ToArray());
 
-            pointBuffer.Clear();
-            pointBuffer.Add(spawnPos);
-            pointBuffer.Add(spawnPos + Vector3.up * 0.005f);
-            currentLine.positionCount = 2;
-            currentLine.SetPositions(pointBuffer.ToArray());
+                    // সবার স্ক্রিনে লাইনের কালার সেট করার আরপিসি
+                    Rpc_SetupStrokeColor(currentNetworkStroke, currentColor);
+                }
+            }
         }
 
         isDrawing = true;
@@ -139,7 +140,7 @@ public class SpatialDrawingManager : MonoBehaviour
 
     private void UpdateDrawing()
     {
-        if (currentLine == null) return;
+        if (currentLine == null || currentNetworkStroke == null) return;
 
         Vector3 currentPos = GetDrawPoint();
         if (pointBuffer.Count > 0 && Vector3.Distance(pointBuffer[pointBuffer.Count - 1], currentPos) >= minVertexDistance)
@@ -147,6 +148,9 @@ public class SpatialDrawingManager : MonoBehaviour
             pointBuffer.Add(currentPos);
             currentLine.positionCount = pointBuffer.Count;
             currentLine.SetPosition(pointBuffer.Count - 1, currentPos);
+
+            // সব প্লেয়ারের কাছে পয়েন্ট পাঠানো
+            Rpc_AddPointToLine(currentNetworkStroke, currentPos);
         }
     }
 
@@ -154,12 +158,47 @@ public class SpatialDrawingManager : MonoBehaviour
     {
         isDrawing = false;
         currentLine = null;
+        currentNetworkStroke = null;
         pointBuffer.Clear();
     }
 
-    // -------------------------------------------------------------
-    // 3D UI Hand Menu বাটনগুলোর সাথে যুক্ত করার মেথডসমূহ
-    // -------------------------------------------------------------
+    // --- নেটওয়ার্ক আরপিসি (RPC) মেথডসমূহ ---
+
+    [Rpc(RpcSources.All, RpcTargets.All)]
+    private void Rpc_SetupStrokeColor(NetworkObject strokeNetObj, Color color)
+    {
+        if (strokeNetObj != null)
+        {
+            LineRenderer lr = strokeNetObj.GetComponent<LineRenderer>();
+            if (lr != null)
+            {
+                lr.startColor = color;
+                lr.endColor = color;
+                if (lr.material != null)
+                {
+                    lr.material.color = color;
+                    lr.material.SetColor("_BaseColor", color);
+                }
+            }
+        }
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.All)]
+    private void Rpc_AddPointToLine(NetworkObject strokeNetObj, Vector3 newPoint)
+    {
+        if (strokeNetObj != null)
+        {
+            LineRenderer lr = strokeNetObj.GetComponent<LineRenderer>();
+            if (lr != null)
+            {
+                int nextIndex = lr.positionCount;
+                lr.positionCount++;
+                lr.SetPosition(nextIndex, newPoint);
+            }
+        }
+    }
+
+    // --- কালার ও ক্লিনিং মেথডসমূহ ---
 
     public void SetColorRed()
     {
@@ -175,8 +214,8 @@ public class SpatialDrawingManager : MonoBehaviour
 
     public void SetColorBlue()
     {
-        currentColor = new Color(0f, 0.7f, 1f); // Neon Cyan / Blue
-        Debug.Log("Spatial UI: Selected Color Blue");
+        currentColor = new Color(0f, 0.7f, 1f);
+        Debug.Log("Spatial UI: Selected Color Blue");
     }
 
     public void RemoveLastStroke()
@@ -184,27 +223,31 @@ public class SpatialDrawingManager : MonoBehaviour
         if (spawnedStrokes.Count > 0)
         {
             int lastIndex = spawnedStrokes.Count - 1;
-            GameObject lastStroke = spawnedStrokes[lastIndex];
+            NetworkObject lastStroke = spawnedStrokes[lastIndex];
             spawnedStrokes.RemoveAt(lastIndex);
 
-            if (lastStroke != null)
+            if (lastStroke != null && Runner != null)
             {
-                Destroy(lastStroke);
-                Debug.Log("Spatial UI: Undo Last Stroke");
+                // নেটওয়ার্ক থেকে অবজেক্ট সরানো
+                Runner.Despawn(lastStroke);
+                Debug.Log("Spatial UI: Despawned Last Stroke");
             }
         }
     }
 
     public void ClearAllStrokes()
     {
-        foreach (var stroke in spawnedStrokes)
+        if (Runner != null)
         {
-            if (stroke != null)
+            foreach (var stroke in spawnedStrokes)
             {
-                Destroy(stroke);
+                if (stroke != null)
+                {
+                    Runner.Despawn(stroke);
+                }
             }
         }
         spawnedStrokes.Clear();
-        Debug.Log("Spatial UI: Cleared All Strokes");
+        Debug.Log("Spatial UI: Cleared All Network Strokes");
     }
 }

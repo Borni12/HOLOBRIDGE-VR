@@ -3,72 +3,59 @@ using Fusion;
 
 public class VRPlayerController : NetworkBehaviour
 {
-    [Header("Visual Transforms")]
+    [Header("Visual Transforms (Sync Objects)")]
     public Transform headVisual;
     public Transform leftHandVisual;
     public Transform rightHandVisual;
 
-    private Transform vrCamera;
-    private Transform vrLeftController;
-    private Transform vrRightController;
+    // ক্যামেরা ও অডিও ট্র্যাক রেফারেন্স
+    private Camera localCamera;
+    private AudioListener localAudio;
 
     public override void Spawned()
     {
-        if (HasStateAuthority)
+        // ১. রিমোট প্লেয়ারের ক্যামেরা ও অডিও নিষ্ক্রিয় করা
+        if (!HasInputAuthority)
         {
-         
-            Camera mainCam = Camera.main;
-            if (mainCam != null)
+            Camera remoteCam = GetComponentInChildren<Camera>();
+            if (remoteCam != null)
             {
-                vrCamera = mainCam.transform;
+                remoteCam.enabled = false;
             }
 
-            
-            GameObject leftObj = GameObject.Find("XR Origin (XR Rig)/Camera Offset/Left Controller");
-            if (leftObj != null)
+            AudioListener remoteAudio = GetComponentInChildren<AudioListener>();
+            if (remoteAudio != null)
             {
-                vrLeftController = leftObj.transform;
+                remoteAudio.enabled = false;
             }
-            else
+        }
+        else
+        {
+            // ২. লোকাল প্লেয়ারের ক্ষেত্রে নিশ্চিত করুন ক্যামেরা সক্রিয় আছে
+            localCamera = GetComponentInChildren<Camera>();
+            if (localCamera != null)
             {
-                vrLeftController = GameObject.Find("Left Controller")?.transform;
+                localCamera.enabled = true;
             }
 
-            GameObject rightObj = GameObject.Find("XR Origin (XR Rig)/Camera Offset/Right Controller");
-            if (rightObj != null)
+            localAudio = GetComponentInChildren<AudioListener>();
+            if (localAudio != null)
             {
-                vrRightController = rightObj.transform;
-            }
-            else
-            {
-                vrRightController = GameObject.Find("Right Controller")?.transform;
+                localAudio.enabled = true;
             }
         }
     }
 
     public override void FixedUpdateNetwork()
     {
-        if (HasStateAuthority)
+        // শুধুমাত্র লোকাল প্লেয়ার তার নিজস্ব পজিশন ও রোটেশন আপডেট করবে
+        if (HasInputAuthority)
         {
-            
-            if (vrCamera != null && headVisual != null)
+            // যদি ক্যামেরা খুঁজে পাওয়া যায় তবে তার পজিশন হেড মডেলে সেট করা
+            if (localCamera != null && headVisual != null)
             {
-                headVisual.position = vrCamera.position;
-                headVisual.rotation = vrCamera.rotation;
-            }
-
-           
-            if (vrLeftController != null && leftHandVisual != null)
-            {
-                leftHandVisual.position = vrLeftController.position;
-                leftHandVisual.rotation = vrLeftController.rotation;
-            }
-
-            
-            if (vrRightController != null && rightHandVisual != null)
-            {
-                rightHandVisual.position = vrRightController.position;
-                rightHandVisual.rotation = vrRightController.rotation;
+                headVisual.position = localCamera.transform.position;
+                headVisual.rotation = localCamera.transform.rotation;
             }
         }
     }
