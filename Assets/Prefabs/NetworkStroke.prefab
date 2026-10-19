@@ -87,7 +87,7 @@ LineRenderer:
   - {x: 0, y: 0, z: 1}
   m_Parameters:
     serializedVersion: 3
-    widthMultiplier: 0.05
+    widthMultiplier: 0.04
     widthCurve:
       serializedVersion: 2
       m_Curve:
@@ -158,7 +158,7 @@ MonoBehaviour:
   SortKey: 2280973495
   SendPriority: 1
   EnableInterpolation: 1
-  Flags: 262146
+  Flags: 786434
   NestedObjects: []
   NetworkedBehaviours: []
   ForceRemoteRenderTimeframe: 0

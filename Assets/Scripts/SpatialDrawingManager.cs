@@ -1,253 +1,182 @@
-﻿using UnityEngine;
+﻿
+using UnityEngine;
 using UnityEngine.InputSystem;
 using System.Collections.Generic;
 using Fusion;
 
-public class SpatialDrawingManager : NetworkBehaviour
+public class SpatialDrawingManager : MonoBehaviour
 {
     [Header("Drawing Configuration")]
     [SerializeField] private NetworkPrefabRef strokePrefab;
-    [SerializeField] private float minVertexDistance = 0.02f;
-    [SerializeField] private float drawDistance = 1.0f;
+    [SerializeField] private float minDistance = 0.02f;
+    [SerializeField] private float forwardOffset = 0.8f;
 
     [Header("Brush Settings")]
-    [SerializeField] private Color currentColor = Color.red;
+    [SerializeField] private Color brushColor = Color.red;
 
-    private NetworkObject currentNetworkStroke;
-    private LineRenderer currentLine;
-    private List<Vector3> pointBuffer = new List<Vector3>();
-    private bool isDrawing = false;
-    private Camera activeCam;
-    private List<NetworkObject> spawnedStrokes = new List<NetworkObject>();
+    private NetworkRunner runner;
+    private NetworkObject activeStrokeObj;
+    private NetworkStroke activeStrokeScript;
+    private Vector3 previousPoint;
+    private bool isDrawingActive = false;
+    private List<NetworkObject> strokeHistory = new List<NetworkObject>();
 
     void Start()
     {
-        FindCam();
-        currentColor = Color.red;
+        brushColor = Color.red;
     }
 
-    private void FindCam()
+    private NetworkRunner ResolveRunner()
     {
-        activeCam = Camera.main;
-        if (activeCam == null)
+        if (runner == null || !runner.IsRunning)
         {
-            activeCam = FindFirstObjectByType<Camera>();
+            runner = FindFirstObjectByType<NetworkRunner>();
         }
+        return runner;
     }
 
     void Update()
     {
-        // ১. কিবোর্ডের ১, ২, ৩ চেপে সরাসরি কালার পরিবর্তন
-        bool key1 = false;
-        bool key2 = false;
-        bool key3 = false;
+        // ১. কিবোর্ড কালার (1, 2, 3)
+        if (Input.GetKeyDown(KeyCode.Alpha1) || (Keyboard.current != null && Keyboard.current.digit1Key.wasPressedThisFrame))
+            brushColor = Color.red;
+        if (Input.GetKeyDown(KeyCode.Alpha2) || (Keyboard.current != null && Keyboard.current.digit2Key.wasPressedThisFrame))
+            brushColor = Color.yellow;
+        if (Input.GetKeyDown(KeyCode.Alpha3) || (Keyboard.current != null && Keyboard.current.digit3Key.wasPressedThisFrame))
+            brushColor = new Color(0f, 0.7f, 1f);
+
+        // ২. কিবোর্ড F অথবা মাউসের রাইট ক্লিক
+        bool startAction = Input.GetKeyDown(KeyCode.F) || Input.GetMouseButtonDown(1);
+        bool holdAction = Input.GetKey(KeyCode.F) || Input.GetMouseButton(1);
+        bool endAction = Input.GetKeyUp(KeyCode.F) || Input.GetMouseButtonUp(1);
 
         if (Keyboard.current != null)
         {
-            key1 = Keyboard.current.digit1Key.wasPressedThisFrame || Keyboard.current.numpad1Key.wasPressedThisFrame;
-            key2 = Keyboard.current.digit2Key.wasPressedThisFrame || Keyboard.current.numpad2Key.wasPressedThisFrame;
-            key3 = Keyboard.current.digit3Key.wasPressedThisFrame || Keyboard.current.numpad3Key.wasPressedThisFrame;
-        }
-        else
-        {
-            key1 = Input.GetKeyDown(KeyCode.Alpha1) || Input.GetKeyDown(KeyCode.Keypad1);
-            key2 = Input.GetKeyDown(KeyCode.Alpha2) || Input.GetKeyDown(KeyCode.Keypad2);
-            key3 = Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3);
+            startAction |= Keyboard.current.fKey.wasPressedThisFrame;
+            holdAction |= Keyboard.current.fKey.isPressed;
+            endAction |= Keyboard.current.fKey.wasReleasedThisFrame;
         }
 
-        if (key1) SetColorRed();
-        if (key2) SetColorYellow();
-        if (key3) SetColorBlue();
-
-        // ২. F কী চেপে অথবা মাউস দিয়ে ড্রয়িং
-        bool drawPressed = false;
-        bool drawHeld = false;
-        bool drawReleased = false;
-
-        if (Keyboard.current != null)
+        if (Mouse.current != null)
         {
-            drawPressed = Keyboard.current.fKey.wasPressedThisFrame;
-            drawHeld = Keyboard.current.fKey.isPressed;
-            drawReleased = Keyboard.current.fKey.wasReleasedThisFrame;
-        }
-        else
-        {
-            drawPressed = Input.GetKeyDown(KeyCode.F);
-            drawHeld = Input.GetKey(KeyCode.F);
-            drawReleased = Input.GetKeyUp(KeyCode.F);
+            startAction |= Mouse.current.rightButton.wasPressedThisFrame;
+            holdAction |= Mouse.current.rightButton.isPressed;
+            endAction |= Mouse.current.rightButton.wasReleasedThisFrame;
         }
 
-        if (drawPressed) StartDrawing();
-        else if (drawHeld && isDrawing) UpdateDrawing();
-        else if (drawReleased && isDrawing) StopDrawing();
-
-        // ৩. কিবোর্ডের C চেপে Undo এবং X চেপে Clear All
-        bool cPressed = (Keyboard.current != null && Keyboard.current.cKey.wasPressedThisFrame) || Input.GetKeyDown(KeyCode.C);
-        if (cPressed)
+        if (startAction)
         {
-            RemoveLastStroke();
+            BeginStroke();
+        }
+        else if (holdAction && isDrawingActive)
+        {
+            ContinueStroke();
+        }
+        else if (endAction && isDrawingActive)
+        {
+            EndStroke();
         }
 
-        bool xPressed = (Keyboard.current != null && Keyboard.current.xKey.wasPressedThisFrame) || Input.GetKeyDown(KeyCode.X);
-        if (xPressed)
+        // ৩. ক্লিয়ার (X)
+        if (Input.GetKeyDown(KeyCode.X) || (Keyboard.current != null && Keyboard.current.xKey.wasPressedThisFrame))
         {
-            ClearAllStrokes();
+            ClearAll();
         }
     }
 
-    private Vector3 GetDrawPoint()
+    // স্ক্রিনের বাম-উপরে সরাসরি ক্লিক করার জন্য বাটন (সিমুলেটরকে সম্পূর্ণ বাইপাস করার জন্য)
+    private void OnGUI()
     {
-        if (activeCam == null) FindCam();
-        if (activeCam == null) return new Vector3(0, 1.2f, 1f);
+        if (GUI.Button(new Rect(20, 20, 160, 50), "DRAW TEST"))
+        {
+            BeginStroke();
+        }
 
-        Vector2 mousePos = Mouse.current != null ? Mouse.current.position.ReadValue() : (Vector2)Input.mousePosition;
-        Vector3 screenPos = new Vector3(mousePos.x, mousePos.y, drawDistance);
-        return activeCam.ScreenToWorldPoint(screenPos);
+        if (isDrawingActive && GUI.Button(new Rect(190, 20, 120, 50), "STOP"))
+        {
+            EndStroke();
+        }
     }
 
-    public void StartDrawing()
+    private Vector3 CalculateDrawOrigin()
     {
-        FindCam();
-        Vector3 spawnPos = GetDrawPoint();
-
-        // লোকাল Instantiate এর বদলে ফিউশন স্পন কল
-        if (Runner != null)
+        var rightHand = GameObject.Find("Right Controller");
+        if (rightHand != null)
         {
-            currentNetworkStroke = Runner.Spawn(strokePrefab, spawnPos, Quaternion.identity, Runner.LocalPlayer);
-            if (currentNetworkStroke != null)
+            return rightHand.transform.position + (rightHand.transform.forward * 0.2f);
+        }
+
+        Camera activeCam = Camera.main;
+        if (activeCam == null) activeCam = FindFirstObjectByType<Camera>();
+        if (activeCam != null)
+        {
+            return activeCam.transform.position + (activeCam.transform.forward * forwardOffset);
+        }
+
+        return new Vector3(0, 1.2f, 1f);
+    }
+
+    public void BeginStroke()
+    {
+        var activeRunner = ResolveRunner();
+        if (activeRunner == null || !activeRunner.IsRunning)
+        {
+            Debug.LogError("[Drawing] NetworkRunner কানেক্টেড নেই! সেশন চালু হতে দিন।");
+            return;
+        }
+
+        Vector3 spawnPosition = CalculateDrawOrigin();
+
+        // ফিউশন স্পন
+        activeStrokeObj = activeRunner.Spawn(strokePrefab, spawnPosition, Quaternion.identity);
+
+        if (activeStrokeObj != null)
+        {
+            strokeHistory.Add(activeStrokeObj);
+            activeStrokeScript = activeStrokeObj.GetComponent<NetworkStroke>();
+
+            if (activeStrokeScript != null)
             {
-                spawnedStrokes.Add(currentNetworkStroke);
-                currentLine = currentNetworkStroke.GetComponent<LineRenderer>();
-
-                if (currentLine != null)
-                {
-                    currentLine.useWorldSpace = true;
-                    pointBuffer.Clear();
-                    pointBuffer.Add(spawnPos);
-                    pointBuffer.Add(spawnPos + Vector3.up * 0.005f);
-
-                    currentLine.positionCount = 2;
-                    currentLine.SetPositions(pointBuffer.ToArray());
-
-                    // সবার স্ক্রিনে লাইনের কালার সেট করার আরপিসি
-                    Rpc_SetupStrokeColor(currentNetworkStroke, currentColor);
-                }
-            }
-        }
-
-        isDrawing = true;
-    }
-
-    private void UpdateDrawing()
-    {
-        if (currentLine == null || currentNetworkStroke == null) return;
-
-        Vector3 currentPos = GetDrawPoint();
-        if (pointBuffer.Count > 0 && Vector3.Distance(pointBuffer[pointBuffer.Count - 1], currentPos) >= minVertexDistance)
-        {
-            pointBuffer.Add(currentPos);
-            currentLine.positionCount = pointBuffer.Count;
-            currentLine.SetPosition(pointBuffer.Count - 1, currentPos);
-
-            // সব প্লেয়ারের কাছে পয়েন্ট পাঠানো
-            Rpc_AddPointToLine(currentNetworkStroke, currentPos);
-        }
-    }
-
-    public void StopDrawing()
-    {
-        isDrawing = false;
-        currentLine = null;
-        currentNetworkStroke = null;
-        pointBuffer.Clear();
-    }
-
-    // --- নেটওয়ার্ক আরপিসি (RPC) মেথডসমূহ ---
-
-    [Rpc(RpcSources.All, RpcTargets.All)]
-    private void Rpc_SetupStrokeColor(NetworkObject strokeNetObj, Color color)
-    {
-        if (strokeNetObj != null)
-        {
-            LineRenderer lr = strokeNetObj.GetComponent<LineRenderer>();
-            if (lr != null)
-            {
-                lr.startColor = color;
-                lr.endColor = color;
-                if (lr.material != null)
-                {
-                    lr.material.color = color;
-                    lr.material.SetColor("_BaseColor", color);
-                }
+                activeStrokeScript.InitColor(brushColor);
+                activeStrokeScript.AddPoint(spawnPosition);
+                activeStrokeScript.Rpc_SyncPoint(spawnPosition);
+                previousPoint = spawnPosition;
+                isDrawingActive = true;
+                Debug.Log($"[Drawing] ড্রয়িং সফলভাবে শুরু হয়েছে পজিশনে: {spawnPosition}");
             }
         }
     }
 
-    [Rpc(RpcSources.All, RpcTargets.All)]
-    private void Rpc_AddPointToLine(NetworkObject strokeNetObj, Vector3 newPoint)
+    private void ContinueStroke()
     {
-        if (strokeNetObj != null)
+        if (activeStrokeScript == null) return;
+
+        Vector3 currentPos = CalculateDrawOrigin();
+        if (Vector3.Distance(currentPos, previousPoint) >= minDistance)
         {
-            LineRenderer lr = strokeNetObj.GetComponent<LineRenderer>();
-            if (lr != null)
-            {
-                int nextIndex = lr.positionCount;
-                lr.positionCount++;
-                lr.SetPosition(nextIndex, newPoint);
-            }
+            previousPoint = currentPos;
+            activeStrokeScript.AddPoint(currentPos);
+            activeStrokeScript.Rpc_SyncPoint(currentPos);
         }
     }
 
-    // --- কালার ও ক্লিনিং মেথডসমূহ ---
-
-    public void SetColorRed()
+    public void EndStroke()
     {
-        currentColor = Color.red;
-        Debug.Log("Spatial UI: Selected Color Red");
+        isDrawingActive = false;
+        activeStrokeScript = null;
+        activeStrokeObj = null;
     }
 
-    public void SetColorYellow()
+    public void ClearAll()
     {
-        currentColor = Color.yellow;
-        Debug.Log("Spatial UI: Selected Color Yellow");
-    }
-
-    public void SetColorBlue()
-    {
-        currentColor = new Color(0f, 0.7f, 1f);
-        Debug.Log("Spatial UI: Selected Color Blue");
-    }
-
-    public void RemoveLastStroke()
-    {
-        if (spawnedStrokes.Count > 0)
+        var activeRunner = ResolveRunner();
+        if (activeRunner != null)
         {
-            int lastIndex = spawnedStrokes.Count - 1;
-            NetworkObject lastStroke = spawnedStrokes[lastIndex];
-            spawnedStrokes.RemoveAt(lastIndex);
-
-            if (lastStroke != null && Runner != null)
+            foreach (var stroke in strokeHistory)
             {
-                // নেটওয়ার্ক থেকে অবজেক্ট সরানো
-                Runner.Despawn(lastStroke);
-                Debug.Log("Spatial UI: Despawned Last Stroke");
+                if (stroke != null) activeRunner.Despawn(stroke);
             }
         }
-    }
-
-    public void ClearAllStrokes()
-    {
-        if (Runner != null)
-        {
-            foreach (var stroke in spawnedStrokes)
-            {
-                if (stroke != null)
-                {
-                    Runner.Despawn(stroke);
-                }
-            }
-        }
-        spawnedStrokes.Clear();
-        Debug.Log("Spatial UI: Cleared All Network Strokes");
+        strokeHistory.Clear();
     }
 }
