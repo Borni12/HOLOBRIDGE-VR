@@ -1499,7 +1499,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5c25eb6c2c2fefc428fb5af2cddcde72, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VRMarkerSpawner
-  markerPrefab: {fileID: 2079069637413154837, guid: d6c6038bd5c1f4d4aa1396ef2aecbed5, type: 3}
+  markerPrefab:
+    RawGuidValue: d6c6038bd5c1f4d4aa1396ef2aecbed5l
+  strokePrefab:
+    RawGuidValue: d0d9973910f1c8a4fbc84de77aabaa7fl
+  minVertexDistance: 0.02
+  forwardOffset: 0.5
+  activeColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!4 &184014552
 Transform:
   m_ObjectHideFlags: 0
@@ -1529,9 +1535,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SpatialDrawingManager
   strokePrefab:
     RawGuidValue: 00000000000000000000000000000000l
-  minVertexDistance: 0.02
-  drawDistance: 1.5
-  currentColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!1 &192135050
 GameObject:
   m_ObjectHideFlags: 0
@@ -15533,9 +15536,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SpatialDrawingManager
   strokePrefab:
     RawGuidValue: d0d9973910f1c8a4fbc84de77aabaa7fl
-  minVertexDistance: 0.02
-  drawDistance: 1
-  currentColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!4 &2135839621
 Transform:
   m_ObjectHideFlags: 0
