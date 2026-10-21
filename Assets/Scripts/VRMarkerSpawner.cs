@@ -1,19 +1,20 @@
-﻿using UnityEngine;
+﻿
+using UnityEngine;
 using UnityEngine.InputSystem;
 using System.Collections.Generic;
 using Fusion;
 
 public class VRMarkerSpawner : MonoBehaviour
 {
-    [Header("Fusion Prefabs")]
+    [Header("Prefabs")]
     [SerializeField] private NetworkPrefabRef markerPrefab;
     [SerializeField] private NetworkPrefabRef strokePrefab;
 
-    [Header("Drawing Optimization")]
-    [SerializeField] private float minVertexDistance = 0.04f; // নেটওয়ার্ক অপ্টিমাইজেশনের জন্য ভার্টেক্স দূরত্ব বাড়ানো হলো
-    [SerializeField] private float forwardOffset = 0.5f;
+    [Header("Drawing Setup")]
+    [SerializeField] private float minVertexDistance = 0.01f;
+    [SerializeField] private float spawnForwardOffset = 0.6f;
 
-    [Header("Color Settings")]
+    [Header("Colors")]
     [SerializeField] private Color activeColor = Color.red;
 
     private NetworkRunner runner;
@@ -21,29 +22,12 @@ public class VRMarkerSpawner : MonoBehaviour
     private NetworkStroke currentStrokeScript;
     private Vector3 lastDrawPoint;
     private bool isDrawing = false;
-    private Transform tipSource;
-
     private List<NetworkObject> strokeHistory = new List<NetworkObject>();
     private bool showPalette = true;
 
     void Start()
     {
-        FindTipSource();
-        activeColor = new Color(1f, 0.05f, 0.05f); // ডিফল্ট লাল
-    }
-
-    private void FindTipSource()
-    {
-        var rightCtrl = GameObject.Find("Right Controller");
-        if (rightCtrl != null)
-        {
-            tipSource = rightCtrl.transform;
-            return;
-        }
-
-        Camera cam = Camera.main;
-        if (cam == null) cam = FindFirstObjectByType<Camera>();
-        if (cam != null) tipSource = cam.transform;
+        activeColor = new Color(1f, 0.05f, 0.05f);
     }
 
     private NetworkRunner GetRunner()
@@ -55,41 +39,55 @@ public class VRMarkerSpawner : MonoBehaviour
         return runner;
     }
 
+    private Vector3 GetTipPosition()
+    {
+        Camera cam = Camera.main;
+        if (cam == null) cam = FindFirstObjectByType<Camera>();
+
+        if (cam != null)
+        {
+            return cam.transform.position + (cam.transform.forward * spawnForwardOffset) - (cam.transform.up * 0.08f);
+        }
+
+        return new Vector3(0, 1.2f, 1f);
+    }
+
     void Update()
     {
         var netRunner = GetRunner();
         if (netRunner == null || !netRunner.IsRunning) return;
 
         // ১. প্যালেট টগল (P কী)
-        bool pDown = Input.GetKeyDown(KeyCode.P) || (Keyboard.current != null && Keyboard.current.pKey.wasPressedThisFrame);
-        if (pDown) showPalette = !showPalette;
+        if (Input.GetKeyDown(KeyCode.P) || (Keyboard.current != null && Keyboard.current.pKey.wasPressedThisFrame))
+        {
+            showPalette = !showPalette;
+        }
 
-        // ২. কালার সিলেকশন (১ = লাল, ২ = নীল, ৩ = হলুদ)
-        bool k1 = Input.GetKeyDown(KeyCode.Alpha1) || (Keyboard.current != null && Keyboard.current.digit1Key.wasPressedThisFrame);
-        bool k2 = Input.GetKeyDown(KeyCode.Alpha2) || (Keyboard.current != null && Keyboard.current.digit2Key.wasPressedThisFrame);
-        bool k3 = Input.GetKeyDown(KeyCode.Alpha3) || (Keyboard.current != null && Keyboard.current.digit3Key.wasPressedThisFrame);
+        // ২. কালার নির্বাচন (১ = লাল, ২ = নীল, ৩ = হলুদ)
+        if (Input.GetKeyDown(KeyCode.Alpha1) || (Keyboard.current != null && Keyboard.current.digit1Key.wasPressedThisFrame))
+            activeColor = new Color(1f, 0.05f, 0.05f);
+        if (Input.GetKeyDown(KeyCode.Alpha2) || (Keyboard.current != null && Keyboard.current.digit2Key.wasPressedThisFrame))
+            activeColor = new Color(0f, 0.55f, 1f);
+        if (Input.GetKeyDown(KeyCode.Alpha3) || (Keyboard.current != null && Keyboard.current.digit3Key.wasPressedThisFrame))
+            activeColor = new Color(1f, 0.92f, 0.016f);
 
-        if (k1) activeColor = new Color(1f, 0.05f, 0.05f);
-        if (k2) activeColor = new Color(0f, 0.55f, 1f);
-        if (k3) activeColor = new Color(1f, 0.92f, 0.016f);
+        // ৩. হলুদ মার্কার বল (Space অথবা মাউস Left Click)
+        bool spaceKey = Input.GetKeyDown(KeyCode.Space) || (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame);
+        bool leftMouse = Input.GetMouseButtonDown(0);
+        if (Mouse.current != null) leftMouse |= Mouse.current.leftButton.wasPressedThisFrame;
 
-        // ৩. মাউসের Left Click = শুধুমাত্র হলুদ মার্কার বল
-        bool leftClickDown = Input.GetMouseButtonDown(0);
-        if (Mouse.current != null) leftClickDown |= Mouse.current.leftButton.wasPressedThisFrame;
-
-        // প্যালেটের ওপর ক্লিক পড়লে যাতে মার্কার স্পন না হয়
+        // প্যালেটের ওপরে ক্লিক পড়লে বল তৈরি বন্ধ রাখা
         if (showPalette && Input.mousePosition.x < 240 && Input.mousePosition.y > Screen.height - 240)
         {
-            leftClickDown = false;
+            leftMouse = false;
         }
 
-        if (leftClickDown && markerPrefab.IsValid)
+        if (spaceKey || leftMouse)
         {
-            Vector3 markerPos = GetCurrentTipPosition();
-            netRunner.Spawn(markerPrefab, markerPos, Quaternion.identity);
+            SpawnMarker(netRunner);
         }
 
-        // ৪. শুধুমাত্র F কী = দাগ কাটা (মাউস রাইট ক্লিক পুরোপুরি মুক্ত থাকবে VR ক্যামেরার জন্য)
+        // ৪. ৩D ড্রয়িং (F কী চেপে ধরে টানা)
         bool fDown = Input.GetKeyDown(KeyCode.F);
         bool fHold = Input.GetKey(KeyCode.F);
         bool fUp = Input.GetKeyUp(KeyCode.F);
@@ -114,52 +112,27 @@ public class VRMarkerSpawner : MonoBehaviour
             StopDrawing();
         }
 
-        // ৫. C কী = একটি একটি করে দাগ মুছে ফেলা
-        bool cDown = Input.GetKeyDown(KeyCode.C) || (Keyboard.current != null && Keyboard.current.cKey.wasPressedThisFrame);
-        if (cDown)
+        // ৫. আনডু (C কী)
+        if (Input.GetKeyDown(KeyCode.C) || (Keyboard.current != null && Keyboard.current.cKey.wasPressedThisFrame))
         {
             RemoveLastStroke(netRunner);
         }
     }
 
-    private void OnGUI()
+    private void SpawnMarker(NetworkRunner netRunner)
     {
-        if (!showPalette) return;
-
-        GUI.Box(new Rect(20, 20, 200, 190), "🎨 3D Color Palette (P: Hide)");
-
-        GUI.backgroundColor = Color.red;
-        if (GUI.Button(new Rect(35, 55, 170, 35), "RED (Press 1)"))
-            activeColor = new Color(1f, 0.05f, 0.05f);
-
-        GUI.backgroundColor = new Color(0f, 0.55f, 1f);
-        if (GUI.Button(new Rect(35, 95, 170, 35), "BLUE (Press 2)"))
-            activeColor = new Color(0f, 0.55f, 1f);
-
-        GUI.backgroundColor = Color.yellow;
-        if (GUI.Button(new Rect(35, 135, 170, 35), "YELLOW (Press 3)"))
-            activeColor = new Color(1f, 0.92f, 0.016f);
-
-        GUI.backgroundColor = activeColor;
-        GUI.Button(new Rect(35, 175, 170, 20), "Current Brush");
-    }
-
-    private Vector3 GetCurrentTipPosition()
-    {
-        if (tipSource == null) FindTipSource();
-        if (tipSource != null)
-        {
-            return tipSource.position + (tipSource.forward * forwardOffset);
-        }
-        return new Vector3(0, 1.2f, 1f);
+        if (!markerPrefab.IsValid) return;
+        Vector3 pos = GetTipPosition();
+        netRunner.Spawn(markerPrefab, pos, Quaternion.identity);
+        Debug.Log($"[Marker] হলুদ বল তৈরি হয়েছে: {pos}");
     }
 
     private void StartDrawing(NetworkRunner netRunner)
     {
         if (!strokePrefab.IsValid) return;
 
-        Vector3 startPos = GetCurrentTipPosition();
-        currentStrokeObj = netRunner.Spawn(strokePrefab, startPos, Quaternion.identity);
+        Vector3 pos = GetTipPosition();
+        currentStrokeObj = netRunner.Spawn(strokePrefab, pos, Quaternion.identity);
 
         if (currentStrokeObj != null)
         {
@@ -169,9 +142,11 @@ public class VRMarkerSpawner : MonoBehaviour
             if (currentStrokeScript != null)
             {
                 currentStrokeScript.InitColor(activeColor);
-                currentStrokeScript.AddPoint(startPos);
-                lastDrawPoint = startPos;
+                currentStrokeScript.AddPoint(pos);
+                currentStrokeScript.AddPoint(pos + new Vector3(0.001f, 0, 0));
+                lastDrawPoint = pos;
                 isDrawing = true;
+                Debug.Log($"[Drawing] দাগ আঁকা শুরু: {pos}");
             }
         }
     }
@@ -180,7 +155,7 @@ public class VRMarkerSpawner : MonoBehaviour
     {
         if (currentStrokeScript == null) return;
 
-        Vector3 currentPos = GetCurrentTipPosition();
+        Vector3 currentPos = GetTipPosition();
         if (Vector3.Distance(currentPos, lastDrawPoint) >= minVertexDistance)
         {
             lastDrawPoint = currentPos;
@@ -208,5 +183,27 @@ public class VRMarkerSpawner : MonoBehaviour
                 netRunner.Despawn(stroke);
             }
         }
+    }
+
+    private void OnGUI()
+    {
+        if (!showPalette) return;
+
+        GUI.Box(new Rect(20, 20, 200, 190), "🎨 3D Color Palette (P: Toggle)");
+
+        GUI.backgroundColor = Color.red;
+        if (GUI.Button(new Rect(35, 55, 170, 35), "RED (Press 1)"))
+            activeColor = new Color(1f, 0.05f, 0.05f);
+
+        GUI.backgroundColor = new Color(0f, 0.55f, 1f);
+        if (GUI.Button(new Rect(35, 95, 170, 35), "BLUE (Press 2)"))
+            activeColor = new Color(0f, 0.55f, 1f);
+
+        GUI.backgroundColor = Color.yellow;
+        if (GUI.Button(new Rect(35, 135, 170, 35), "YELLOW (Press 3)"))
+            activeColor = new Color(1f, 0.92f, 0.016f);
+
+        GUI.backgroundColor = activeColor;
+        GUI.Button(new Rect(35, 175, 170, 20), "Current Brush");
     }
 }
