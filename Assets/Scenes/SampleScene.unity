@@ -1503,7 +1503,7 @@ MonoBehaviour:
   strokePrefab:
     RawGuidValue: d0d9973910f1c8a4fbc84de77aabaa7fl
   minVertexDistance: 0.02
-  forwardOffset: 0.5
+  forwardDistance: 0.6
   activeColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!4 &184014552
 Transform:
