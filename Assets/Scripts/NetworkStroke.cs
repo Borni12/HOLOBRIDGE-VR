@@ -4,45 +4,61 @@ using Fusion;
 [RequireComponent(typeof(LineRenderer))]
 public class NetworkStroke : NetworkBehaviour
 {
-    private LineRenderer lr;
+    private LineRenderer lineRenderer;
 
     [Networked] public Color StrokeColor { get; set; }
 
     private void Awake()
     {
-        lr = GetComponent<LineRenderer>();
-        lr.useWorldSpace = true;
+        EnsureLineRenderer();
+    }
+
+    private void EnsureLineRenderer()
+    {
+        if (lineRenderer == null)
+        {
+            lineRenderer = GetComponent<LineRenderer>();
+            lineRenderer.useWorldSpace = true;
+            lineRenderer.alignment = LineAlignment.View;
+            if (lineRenderer.widthMultiplier < 0.04f)
+            {
+                lineRenderer.widthMultiplier = 0.05f;
+            }
+        }
     }
 
     public void InitColor(Color col)
     {
         StrokeColor = col;
-        UpdateLineVisual(col);
+        UpdateVisualColor(col);
     }
 
     public override void Render()
     {
-        UpdateLineVisual(StrokeColor);
+        UpdateVisualColor(StrokeColor);
     }
 
-    private void UpdateLineVisual(Color col)
+    private void UpdateVisualColor(Color col)
     {
-        if (lr == null) lr = GetComponent<LineRenderer>();
-        if (lr != null)
+        EnsureLineRenderer();
+        if (lineRenderer != null)
         {
-            lr.startColor = col;
-            lr.endColor = col;
-            if (lr.material != null) lr.material.color = col;
+            lineRenderer.startColor = col;
+            lineRenderer.endColor = col;
+            if (lineRenderer.material != null)
+            {
+                lineRenderer.material.color = col;
+            }
         }
     }
 
     public void AddPoint(Vector3 pt)
     {
-        if (lr == null) lr = GetComponent<LineRenderer>();
-        if (lr != null)
+        EnsureLineRenderer();
+        if (lineRenderer != null)
         {
-            lr.positionCount++;
-            lr.SetPosition(lr.positionCount - 1, pt);
+            lineRenderer.positionCount++;
+            lineRenderer.SetPosition(lineRenderer.positionCount - 1, pt);
         }
     }
 

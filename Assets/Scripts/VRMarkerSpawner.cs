@@ -6,45 +6,43 @@ using Fusion;
 public class VRMarkerSpawner : MonoBehaviour
 {
     [Header("Fusion Prefabs")]
-    [SerializeField] private NetworkPrefabRef markerPrefab;   // আপনার বিদ্যমান হলুদ মার্কার পিন
-    [SerializeField] private NetworkPrefabRef strokePrefab;   // নতুন লাইন ড্রয়িং প্রিফ্যাব (NetworkStroke)
+    [SerializeField] private NetworkPrefabRef markerPrefab; // MarkerPin
+    [SerializeField] private NetworkPrefabRef strokePrefab; // NetworkStroke
 
-    [Header("Drawing Parameters")]
+    [Header("Drawing Configuration")]
     [SerializeField] private float minVertexDistance = 0.02f;
-    [SerializeField] private float forwardOffset = 0.5f;
+    [SerializeField] private float forwardDistance = 0.6f;
 
-    [Header("Current Color Settings")]
+    [Header("Brush Settings")]
     [SerializeField] private Color activeColor = Color.red;
 
     private NetworkRunner runner;
-    private NetworkObject currentActiveStroke;
+    private NetworkObject currentStrokeObj;
     private NetworkStroke currentStrokeScript;
     private Vector3 lastDrawPoint;
     private bool isDrawing = false;
-    private Transform drawingTip;
+    private Transform drawTip;
 
-    // একটার পর একটা দাগ মুছার জন্য হিস্ট্রি লিস্ট
-    private List<NetworkObject> strokeHistory = new List<NetworkObject>();
+    private List<NetworkObject> strokeList = new List<NetworkObject>();
 
     void Start()
     {
-        FindTipSource();
-        activeColor = Color.red; // ডিফল্ট লাল রঙ
-    }
+        FindTip();
+        activeColor = Color.red;
+    }
 
-    private void FindTipSource()
+    private void FindTip()
     {
-        // কন্ট্রোলার বা ক্যামেরা ট্রেস করা
-        var rightController = GameObject.Find("Right Controller");
-        if (rightController != null)
+        var rightCtrl = GameObject.Find("Right Controller");
+        if (rightCtrl != null)
         {
-            drawingTip = rightController.transform;
+            drawTip = rightCtrl.transform;
             return;
         }
 
         Camera cam = Camera.main;
         if (cam == null) cam = FindFirstObjectByType<Camera>();
-        if (cam != null) drawingTip = cam.transform;
+        if (cam != null) drawTip = cam.transform;
     }
 
     private NetworkRunner GetRunner()
@@ -58,106 +56,135 @@ public class VRMarkerSpawner : MonoBehaviour
 
     void Update()
     {
-        // ১. রঙ পরিবর্তন: ১ = লাল, ২ = নীল, ৩ = হলুদ
-        bool press1 = Input.GetKeyDown(KeyCode.Alpha1) || (Keyboard.current != null && Keyboard.current.digit1Key.wasPressedThisFrame);
-        bool press2 = Input.GetKeyDown(KeyCode.Alpha2) || (Keyboard.current != null && Keyboard.current.digit2Key.wasPressedThisFrame);
-        bool press3 = Input.GetKeyDown(KeyCode.Alpha3) || (Keyboard.current != null && Keyboard.current.digit3Key.wasPressedThisFrame);
+        var netRunner = GetRunner();
+        if (netRunner == null || !netRunner.IsRunning) return;
 
-        if (press1)
+        // ১. কালার নির্বাচন (১ = লাল, ২ = নীল, ৩ = হলুদ)
+        bool k1 = Input.GetKeyDown(KeyCode.Alpha1) || (Keyboard.current != null && Keyboard.current.digit1Key.wasPressedThisFrame);
+        bool k2 = Input.GetKeyDown(KeyCode.Alpha2) || (Keyboard.current != null && Keyboard.current.digit2Key.wasPressedThisFrame);
+        bool k3 = Input.GetKeyDown(KeyCode.Alpha3) || (Keyboard.current != null && Keyboard.current.digit3Key.wasPressedThisFrame);
+
+        if (k1) { activeColor = Color.red; Debug.Log("<color=red>Color Selected: RED</color>"); }
+        if (k2) { activeColor = new Color(0f, 0.6f, 1f); Debug.Log("<color=cyan>Color Selected: BLUE</color>"); }
+        if (k3) { activeColor = Color.yellow; Debug.Log("<color=yellow>Color Selected: YELLOW</color>"); }
+
+        // ২. হলুদ বল স্পন (Space কী)
+        bool spawnMarker = Input.GetKeyDown(KeyCode.Space) || (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame);
+        if (spawnMarker && markerPrefab.IsValid)
         {
-            activeColor = Color.red;
-            Debug.Log("[VR Drawing] Color Selected: RED");
-        }
-        else if (press2)
-        {
-            activeColor = new Color(0f, 0.5f, 1f); // নীল
-            Debug.Log("[VR Drawing] Color Selected: BLUE");
-        }
-        else if (press3)
-        {
-            activeColor = Color.yellow;
-            Debug.Log("[VR Drawing] Color Selected: YELLOW");
+            Vector3 markerPos = GetTipPosition();
+            netRunner.Spawn(markerPrefab, markerPos, Quaternion.identity);
+            Debug.Log($"[Marker] হলুদ মার্কার তৈরি হয়েছে: {markerPos}");
         }
 
-        // ২. F কী দিয়ে দাগ ড্রয়িং (Down, Hold, Up)
-        bool fDown = Input.GetKeyDown(KeyCode.F) || (Keyboard.current != null && Keyboard.current.fKey.wasPressedThisFrame);
-        bool fHold = Input.GetKey(KeyCode.F) || (Keyboard.current != null && Keyboard.current.fKey.isPressed);
-        bool fUp = Input.GetKeyUp(KeyCode.F) || (Keyboard.current != null && Keyboard.current.fKey.wasReleasedThisFrame);
+        // ৩. দাগ আঁকা (F বাটন অথবা মাউস রাইট ক্লিক)
+        bool fDown = Input.GetKeyDown(KeyCode.F) || Input.GetMouseButtonDown(1);
+        bool fHold = Input.GetKey(KeyCode.F) || Input.GetMouseButton(1);
+        bool fUp = Input.GetKeyUp(KeyCode.F) || Input.GetMouseButtonUp(1);
+
+        if (Keyboard.current != null)
+        {
+            fDown |= Keyboard.current.fKey.wasPressedThisFrame;
+            fHold |= Keyboard.current.fKey.isPressed;
+            fUp |= Keyboard.current.fKey.wasReleasedThisFrame;
+        }
+        if (Mouse.current != null)
+        {
+            fDown |= Mouse.current.rightButton.wasPressedThisFrame;
+            fHold |= Mouse.current.rightButton.isPressed;
+            fUp |= Mouse.current.rightButton.wasReleasedThisFrame;
+        }
 
         if (fDown)
         {
-            StartDrawingStroke();
+            StartDrawing(netRunner);
         }
         else if (fHold && isDrawing)
         {
-            ContinueDrawingStroke();
+            ContinueDrawing();
         }
         else if (fUp && isDrawing)
         {
-            StopDrawingStroke();
+            StopDrawing();
         }
 
-        // ৩. C কী চাপলে একটি একটি করে দাগ রিমুভ (Undo)
+        // ৪. C চাপলে একটি একটি করে দাগ রিমুভ (Undo)
         bool cDown = Input.GetKeyDown(KeyCode.C) || (Keyboard.current != null && Keyboard.current.cKey.wasPressedThisFrame);
         if (cDown)
         {
-            RemoveLastStrokeOneByOne();
+            RemoveLastStroke(netRunner);
+        }
+
+        // ৫. X চাপলে সব দাগ একসাথে ক্লিয়ার
+        bool xDown = Input.GetKeyDown(KeyCode.X) || (Keyboard.current != null && Keyboard.current.xKey.wasPressedThisFrame);
+        if (xDown)
+        {
+            ClearAll(netRunner);
         }
     }
 
-    private Vector3 GetCurrentTipPosition()
+    // অন-স্ক্রিন বাটন (সিমুলেটরকে শতভাগ পাশ কাটিয়ে নিশ্চিত টেস্ট করার জন্য)
+    private void OnGUI()
     {
-        if (drawingTip == null) FindTipSource();
-
-        if (drawingTip != null)
+        if (GUI.Button(new Rect(30, 30, 200, 60), "FORCE DRAW"))
         {
-            return drawingTip.position + (drawingTip.forward * forwardOffset);
+            var netRunner = GetRunner();
+            if (netRunner != null && netRunner.IsRunning)
+            {
+                StartDrawing(netRunner);
+                // তাৎক্ষণিক টেস্টের জন্য একটি ছোট লাইন তৈরি
+                Vector3 current = GetTipPosition();
+                ContinueDrawingTestPoint(current + Vector3.right * 0.2f);
+                StopDrawing();
+            }
+        }
+    }
+
+    private Vector3 GetTipPosition()
+    {
+        if (drawTip == null) FindTip();
+
+        if (drawTip != null)
+        {
+            return drawTip.position + (drawTip.forward * forwardDistance);
         }
 
         return new Vector3(0, 1.2f, 1f);
     }
 
-    private void StartDrawingStroke()
+    private void StartDrawing(NetworkRunner netRunner)
     {
-        var netRunner = GetRunner();
-        if (netRunner == null || !netRunner.IsRunning)
-        {
-            Debug.LogWarning("[VR Drawing] NetworkRunner সক্রিয় নেই!");
-            return;
-        }
-
         if (!strokePrefab.IsValid)
         {
             Debug.LogError("[VR Drawing] Stroke Prefab অ্যাসাইন করা নেই বা ইনভ্যালিড!");
             return;
         }
 
-        Vector3 startPos = GetCurrentTipPosition();
+        Vector3 spawnPos = GetTipPosition();
+        currentStrokeObj = netRunner.Spawn(strokePrefab, spawnPos, Quaternion.identity);
 
-        // নেটওয়ার্কে স্পন
-        currentActiveStroke = netRunner.Spawn(strokePrefab, startPos, Quaternion.identity);
-
-        if (currentActiveStroke != null)
+        if (currentStrokeObj != null)
         {
-            strokeHistory.Add(currentActiveStroke);
-            currentStrokeScript = currentActiveStroke.GetComponent<NetworkStroke>();
+            strokeList.Add(currentStrokeObj);
+            currentStrokeScript = currentStrokeObj.GetComponent<NetworkStroke>();
 
             if (currentStrokeScript != null)
             {
                 currentStrokeScript.InitColor(activeColor);
-                currentStrokeScript.AddPoint(startPos);
-                currentStrokeScript.Rpc_SyncPoint(startPos);
-                lastDrawPoint = startPos;
+                currentStrokeScript.AddPoint(spawnPos);
+                currentStrokeScript.Rpc_SyncPoint(spawnPos);
+                lastDrawPoint = spawnPos;
                 isDrawing = true;
+                Debug.Log($"[VR Drawing] দাগ আঁকা শুরু হয়েছে: {spawnPos}");
             }
         }
     }
 
-    private void ContinueDrawingStroke()
+    private void ContinueDrawing()
     {
         if (currentStrokeScript == null) return;
 
-        Vector3 currentPos = GetCurrentTipPosition();
+        Vector3 currentPos = GetTipPosition();
         if (Vector3.Distance(currentPos, lastDrawPoint) >= minVertexDistance)
         {
             lastDrawPoint = currentPos;
@@ -166,28 +193,46 @@ public class VRMarkerSpawner : MonoBehaviour
         }
     }
 
-    private void StopDrawingStroke()
+    private void ContinueDrawingTestPoint(Vector3 pt)
+    {
+        if (currentStrokeScript == null) return;
+        currentStrokeScript.AddPoint(pt);
+        currentStrokeScript.Rpc_SyncPoint(pt);
+    }
+
+    private void StopDrawing()
     {
         isDrawing = false;
         currentStrokeScript = null;
-        currentActiveStroke = null;
+        currentStrokeObj = null;
     }
 
-    // একটি একটি করে দাগ মোছার ফাংশন
-    public void RemoveLastStrokeOneByOne()
+    public void RemoveLastStroke(NetworkRunner netRunner)
     {
-        if (strokeHistory.Count > 0)
+        if (strokeList.Count > 0)
         {
-            int lastIndex = strokeHistory.Count - 1;
-            NetworkObject strokeToRemove = strokeHistory[lastIndex];
-            strokeHistory.RemoveAt(lastIndex);
+            int lastIndex = strokeList.Count - 1;
+            NetworkObject stroke = strokeList[lastIndex];
+            strokeList.RemoveAt(lastIndex);
 
-            var netRunner = GetRunner();
-            if (strokeToRemove != null && netRunner != null && netRunner.IsRunning)
+            if (stroke != null && netRunner.IsRunning)
             {
-                netRunner.Despawn(strokeToRemove);
-                Debug.Log("[VR Drawing] সর্বশেষ দাগটি সফলভাবে ডিলিট করা হয়েছে।");
+                netRunner.Despawn(stroke);
+                Debug.Log("[VR Drawing] একটি দাগ মুছে ফেলা হয়েছে।");
             }
         }
+    }
+
+    public void ClearAll(NetworkRunner netRunner)
+    {
+        foreach (var stroke in strokeList)
+        {
+            if (stroke != null && netRunner.IsRunning)
+            {
+                netRunner.Despawn(stroke);
+            }
+        }
+        strokeList.Clear();
+        Debug.Log("[VR Drawing] সমস্ত দাগ ক্লিয়ার করা হয়েছে।");
     }
 }
