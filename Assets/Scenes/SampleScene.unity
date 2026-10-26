@@ -1458,7 +1458,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 184014552}
-  - component: {fileID: 184014551}
   - component: {fileID: 184014550}
   m_Layer: 0
   m_Name: TeastSpawner
@@ -1486,25 +1485,6 @@ MonoBehaviour:
   NestedObjects: []
   NetworkedBehaviours: []
   ForceRemoteRenderTimeframe: 0
---- !u!114 &184014551
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 184014549}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5c25eb6c2c2fefc428fb5af2cddcde72, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::VRMarkerSpawner
-  markerPrefab:
-    RawGuidValue: d6c6038bd5c1f4d4aa1396ef2aecbed5l
-  strokePrefab:
-    RawGuidValue: d0d9973910f1c8a4fbc84de77aabaa7fl
-  minVertexDistance: 0.02
-  spawnForwardOffset: 0.65
-  activeColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!4 &184014552
 Transform:
   m_ObjectHideFlags: 0
@@ -9529,6 +9509,30 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1194192234}
   m_CullTransparentMesh: 1
+--- !u!1 &1196304956 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7277802327528778795, guid: 77e7c27b2c5525e4aa8cc9f99d654486, type: 3}
+  m_PrefabInstance: {fileID: 2779669268269126897}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1196304963
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1196304956}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5c25eb6c2c2fefc428fb5af2cddcde72, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VRMarkerSpawner
+  markerPrefab:
+    RawGuidValue: d6c6038bd5c1f4d4aa1396ef2aecbed5l
+  strokePrefab:
+    RawGuidValue: d0d9973910f1c8a4fbc84de77aabaa7fl
+  minVertexDistance: 0.01
+  spawnForwardOffset: 0.6
+  activeColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!1 &1198760459
 GameObject:
   m_ObjectHideFlags: 0
@@ -15489,52 +15493,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: a8211a3e0e87d014e8326e23ae022d39, type: 3}
   m_PrefabInstance: {fileID: 2125541156}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &2135839619
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 2135839621}
-  - component: {fileID: 2135839620}
-  m_Layer: 0
-  m_Name: SpatialDrawingManager
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 0
---- !u!114 &2135839620
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2135839619}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d781fe4fcf99a4040a089c18ce9697ce, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SpatialDrawingManager
-  strokePrefab:
-    RawGuidValue: d0d9973910f1c8a4fbc84de77aabaa7fl
---- !u!4 &2135839621
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2135839619}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 5.94402, y: -0, z: -5.52474}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2140134476
 GameObject:
   m_ObjectHideFlags: 0
@@ -17259,7 +17217,10 @@ PrefabInstance:
     - {fileID: 3639148551234328385, guid: 77e7c27b2c5525e4aa8cc9f99d654486, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7277802327528778795, guid: 77e7c27b2c5525e4aa8cc9f99d654486, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1196304963}
   m_SourcePrefab: {fileID: 100100000, guid: 77e7c27b2c5525e4aa8cc9f99d654486, type: 3}
 --- !u!1001 &3257631069116033653
 PrefabInstance:
@@ -18488,4 +18449,3 @@ SceneRoots:
   - {fileID: 7271100141333742976}
   - {fileID: 184014552}
   - {fileID: 486470535}
-  - {fileID: 2135839621}
