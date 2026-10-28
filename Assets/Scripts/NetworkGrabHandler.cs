@@ -3,6 +3,9 @@ using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
+/// <summary>
+/// Handles state authority requests when an object is grabbed via XR Interaction Toolkit.
+/// </summary>
 public class NetworkGrabHandler : NetworkBehaviour
 {
     private XRGrabInteractable grabInteractable;
@@ -30,8 +33,7 @@ public class NetworkGrabHandler : NetworkBehaviour
 
     private void OnGrab(SelectEnterEventArgs args)
     {
-        
-        if (Object != null && !Object.HasStateAuthority)
+        if (Object != null && !Object.HasStateAuthority)
         {
             Object.RequestStateAuthority();
         }

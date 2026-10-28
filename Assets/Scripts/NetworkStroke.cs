@@ -1,6 +1,9 @@
-﻿using UnityEngine;
+using UnityEngine;
 using Fusion;
 
+/// <summary>
+/// NetworkStroke - Synchronizes 3D spatial polyline drawing strokes across Photon Fusion clients.
+/// </summary>
 [RequireComponent(typeof(LineRenderer))]
 public class NetworkStroke : NetworkBehaviour
 {
@@ -21,8 +24,8 @@ public class NetworkStroke : NetworkBehaviour
             lineRenderer = GetComponent<LineRenderer>();
             lineRenderer.useWorldSpace = true;
             lineRenderer.alignment = LineAlignment.View;
-            lineRenderer.numCornerVertices = 5; // অতিরিক্ত ওভারহেড কমাতে ৫ মান আদর্শ
-            lineRenderer.numCapVertices = 5;
+            lineRenderer.numCornerVertices = 5;
+            lineRenderer.numCapVertices = 5;
             if (lineRenderer.widthMultiplier < 0.04f)
             {
                 lineRenderer.widthMultiplier = 0.05f;
@@ -72,8 +75,7 @@ public class NetworkStroke : NetworkBehaviour
             lineRenderer.SetPosition(lineRenderer.positionCount - 1, pt);
         }
 
-        // নেটওয়ার্কের অন্য ক্লায়েন্টদের সাথে সিঙ্ক
-        if (Object != null && Object.IsValid && HasStateAuthority)
+        if (Object != null && Object.IsValid && HasStateAuthority)
         {
             Rpc_SyncPoint(pt);
         }

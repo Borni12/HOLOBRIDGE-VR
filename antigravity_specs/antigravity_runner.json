@@ -1,0 +1,26 @@
+﻿{
+  "project_name": "HOLOBRIDGE-VR",
+  "target_engine": "Unity 6 / 2022.3 LTS (URP)",
+  "platform": "windows-11",
+  "xr_target": "OpenXR / Meta Quest",
+  "workspace_root": ".\\",
+  "source_specs": [
+    "antigravity_specs\\SYSTEM_INSTRUCTIONS.md",
+    "antigravity_specs\\MODULE_1_BIMANUAL_TRANSFORM.md",
+    "antigravity_specs\\MODULE_2_VOLUMETRIC_SNAPPING.md",
+    "antigravity_specs\\MODULE_3_ADAPTIVE_REST_FRAME.md",
+    "antigravity_specs\\MODULE_4_FUSION_COLLAB_SYNC.md"
+  ],
+  "output_mappings": {
+    "MODULE_1": "Assets\\Scripts\\Interaction\\SpatialTransformManager.cs",
+    "MODULE_2": "Assets\\Scripts\\Interaction\\VolumetricSnapping.cs",
+    "MODULE_3": "Assets\\Scripts\\Comfort\\AdaptiveRestFrame.cs",
+    "MODULE_4": "Assets\\Scripts\\Networking\\FusionCollabController.cs"
+  },
+  "compiler_rules": {
+    "strict_mode": true,
+    "no_placeholders": true,
+    "auto_null_checks": true,
+    "target_frame_rate": 90
+  }
+}
