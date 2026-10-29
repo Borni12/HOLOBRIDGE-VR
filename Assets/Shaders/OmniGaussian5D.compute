@@ -1,0 +1,132 @@
+#pragma kernel CSMainPhysics
+#pragma kernel CSTimeBranch
+#pragma kernel CSGazePeel
+
+struct GaussianParticle
+{
+    float3 position;
+    float3 scale;
+    float4 rotation;
+    float4 color;
+    int materialType; // 0=Rigid, 1=Elastic Rubber, 2=Liquid/Viscous, 3=Human Skin
+};
+
+RWStructuredBuffer<float3> _Positions;
+RWStructuredBuffer<float3> _Scales;
+RWStructuredBuffer<float4> _Rotations;
+RWStructuredBuffer<float4> _Colors;
+StructuredBuffer<int> _MaterialTypes;
+
+// Multiverse Branches (5 branches * 16 steps)
+RWStructuredBuffer<float3> _MultiverseBranches;
+
+// Interaction & Telemetry Uniforms
+float3 _HandLPos;
+float3 _HandRPos;
+float _HandRadius;
+float _DeltaTime;
+float _Stiffness;
+float3 _GazeOrigin;
+float3 _GazeDirection;
+float _GazeVergenceDepth;
+int _TotalParticles;
+
+[numthreads(64, 1, 1)]
+void CSMainPhysics(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_TotalParticles) return;
+
+    uint idx = id.x;
+    int mat = _MaterialTypes[idx];
+    if (mat == 0) return; // Static / Rigid Environment
+
+    float3 pos = _Positions[idx];
+    float4 col = _Colors[idx];
+
+    // Evaluate Bimanual Interaction Spheres
+    float distL = distance(pos, _HandLPos);
+    float distR = distance(pos, _HandRPos);
+
+    float3 force = float3(0, 0, 0);
+
+    // Right Hand Interaction (Dominant)
+    if (distR < _HandRadius && distR > 0.001)
+    {
+        float3 dir = normalize(pos - _HandRPos);
+        float mag = (_HandRadius - distR) / _HandRadius;
+
+        if (mat == 1) // Elastic Rubber: Radial displacement with recoil
+        {
+            force += dir * mag * 8.0;
+        }
+        else if (mat == 2) // Liquid: Viscous turbulence
+        {
+            force += dir * mag * 14.0 + cross(dir, float3(0, 1, 0)) * 6.0;
+        }
+        else if (mat == 3) // Skin: Surface tangential stretch
+        {
+            force += dir * mag * 3.5;
+        }
+    }
+
+    // Material Point Method (MPM) Restoration Force
+    float3 anchor = float3(0, 1.2, 0.8);
+    float3 restoration = (anchor - pos) * _Stiffness * 4.5;
+    force += restoration;
+
+    // Apply Velocity Integration
+    pos += force * _DeltaTime * _DeltaTime;
+    _Positions[idx] = pos;
+
+    // Visual Stress Tensor Highlight
+    if (mat == 1 && length(force) > 1.5)
+    {
+        col.rgb = lerp(col.rgb, float3(1.0, 0.2, 0.1), 0.35);
+    }
+    _Colors[idx] = col;
+}
+
+[numthreads(5, 16, 1)]
+void CSTimeBranch(uint3 id : SV_DispatchThreadID)
+{
+    uint branchIdx = id.x;
+    uint stepIdx = id.y;
+    if (branchIdx >= 5 || stepIdx >= 16) return;
+
+    uint flatIdx = branchIdx * 16 + stepIdx;
+    float t = (float)(stepIdx + 1) / 16.0;
+
+    float angle = ((float)branchIdx - 2.0) * 0.42;
+    float3 offset = float3(sin(angle) * 0.35 * t, cos(angle) * 0.12 * t - 0.5 * 9.81 * (t * 0.3) * (t * 0.3), t * 0.85);
+
+    _MultiverseBranches[flatIdx] = _HandRPos + offset;
+}
+
+[numthreads(64, 1, 1)]
+void CSGazePeel(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_TotalParticles) return;
+
+    uint idx = id.x;
+    float3 pos = _Positions[idx];
+    float4 col = _Colors[idx];
+
+    float3 toParticle = pos - _GazeOrigin;
+    float projDist = dot(toParticle, _GazeDirection);
+
+    if (projDist > 0.05 && projDist < _GazeVergenceDepth)
+    {
+        float3 projPoint = _GazeOrigin + _GazeDirection * projDist;
+        float radialDist = distance(pos, projPoint);
+
+        // Narrow foveal peeling cone (2.5 deg ~ 0.045m at 1m)
+        float foveaRadius = projDist * 0.045;
+        if (radialDist < foveaRadius)
+        {
+            float alphaFactor = smoothstep(0.0, foveaRadius, radialDist);
+            col.a = min(col.a, alphaFactor * 0.85);
+        }
+    }
+
+    _Colors[idx] = col;
+}

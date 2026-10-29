@@ -35,6 +35,25 @@ public class VRMarkerSpawner : NetworkBehaviour
     [SerializeField] private float defaultDistance = 1.2f;
     [SerializeField] private float minVertexDistance = 0.015f;
 
+    public InteractionMode CurrentInteractionMode
+    {
+        get => currentMode;
+        set => currentMode = value;
+    }
+    public float BallRadius
+    {
+        get => ballRadius;
+        set => ballRadius = Mathf.Clamp(value, 0.02f, 0.40f);
+    }
+    public float StrokeWidth
+    {
+        get => strokeWidth;
+        set => strokeWidth = Mathf.Clamp(value, 0.005f, 0.06f);
+    }
+    public void SetInteractionMode(InteractionMode mode) => currentMode = mode;
+    public void SetBallRadius(float radius) => ballRadius = Mathf.Clamp(radius, 0.02f, 0.40f);
+    public void SetStrokeWidth(float width) => strokeWidth = Mathf.Clamp(width, 0.005f, 0.06f);
+
     [Header("Active Dynamic Color")]
     [SerializeField] private Color activeColor = new Color(0f, 0.85f, 1f, 1f); // Default: Vibrant Cyan
 
@@ -92,6 +111,7 @@ public class VRMarkerSpawner : NetworkBehaviour
     private Camera activeCamera;
 
     // UI Window
+    [SerializeField] private bool showOnScreenGui = false; // Default: clean view without screen-blocking overlays
     private Rect paletteWindowRect = new Rect(20, 20, 270, 460);
     private bool showRgbSliders = false;
 
@@ -140,6 +160,12 @@ public class VRMarkerSpawner : NetworkBehaviour
 
         // 1. Update Cybersickness Comfort Dynamics
         UpdateCybersicknessComfort();
+
+        // If OmniOS Spatial Operating System is active, let OmniOS manage spatial pointer and app interactions
+        if (OmniOS.Core.OmniOSManager.Instance != null)
+        {
+            return;
+        }
 
         // 2. Check Undo Input ('C' Key)
         HandleUndoInput();
@@ -513,8 +539,11 @@ public class VRMarkerSpawner : NetworkBehaviour
             GUI.color = prevColor;
         }
 
-        // 2. Render On-Screen Palette Window
-        paletteWindowRect = GUI.Window(999, paletteWindowRect, DrawPaletteWindow, "HOLOBRIDGE - 3D Creator");
+        // 2. Render On-Screen Palette Window only if explicitly enabled and OmniOS is not running
+        if (showOnScreenGui && OmniOS.Core.OmniOSManager.Instance == null)
+        {
+            paletteWindowRect = GUI.Window(999, paletteWindowRect, DrawPaletteWindow, "HOLOBRIDGE - 3D Creator");
+        }
     }
 
     private void DrawPaletteWindow(int windowID)

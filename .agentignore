@@ -1,0 +1,17 @@
+Library/
+Temp/
+Obj/
+Build/
+Builds/
+Logs/
+UserSettings/
+Packages/
+*.ply
+*.splat
+*.onnx
+*.pt
+*.pth
+*.mp4
+*.png
+*.jpg
+*.wav

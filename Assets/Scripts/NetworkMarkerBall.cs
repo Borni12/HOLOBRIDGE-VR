@@ -27,8 +27,11 @@ public class NetworkMarkerBall : NetworkBehaviour
 
     public void Init(Color color, float radius)
     {
-        BallColor = color;
-        BallRadius = radius;
+        if (Object != null && Object.IsValid)
+        {
+            BallColor = color;
+            BallRadius = radius;
+        }
         ApplyVisuals(color, radius);
     }
 
