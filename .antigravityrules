@@ -1,7 +1,6 @@
-# STRICT TOKEN-SAVER & GRAPHICS-FIRST RULES
-1. OUTPUT FORMAT: Output ONLY executable code blocks. Zero prose, zero conversation, zero markdown boilerplate.
-2. SCOPE LOCK: Modify or create ONLY the single target file specified in the prompt. Do not inspect or read unrequested directories.
-3. GRAPHICS & 3DUI FOCUS: 
-   - Universal Render Pipeline (URP) with 3D Gaussian Splatting Rasterization.
-   - 90 FPS GPU Compute Shaders (HLSL) for continuum mechanics.
-   - Sub-millimeter 1-Euro Filtered 6-DoF Hand Tracking and Eye Gaze OpenXR integration.
+# STRICT ARCHITECTURAL IMMUTABILITY & ANTI-REGRESSION RULES
+1. IMMUTABILITY CONTRACT: NEVER delete, rename, or change the method signature of existing public methods, events, properties, or fields in any file.
+2. SURGICAL ADDITIONS ONLY: When adding a new feature, append new isolated modular methods, helper classes, or subscribe to the OmniEventBus. Do NOT refactor working methods unless explicitly instructed with a targeted diff.
+3. OUTPUT FORMAT: Output ONLY the complete, syntactically verified code block for the single target file. Zero conversational filler, zero markdown explanations.
+4. DEPENDENCY RULE: Features must communicate exclusively through `Assets/Scripts/Core/IOmniEvents.cs` or explicit C# interfaces. No direct circular tight-coupling.
+5. MEMORY & TOKEN LOCK: Never read or index directories outside the immediate target file context.

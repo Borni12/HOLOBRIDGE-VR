@@ -11,12 +11,13 @@ namespace OmniGenesis.Core
 {
     /// <summary>
     /// OmniGenesisClient - WebSocket Bridge & 90 FPS ComputeBuffer Synchronizer.
+    /// Strictly implements IOmniInputSource and subscribes to OmniEventBus.
     /// Manages GPU ComputeBuffers for 65,536 photorealistic 5D Gaussian Splats,
     /// 5 Multiverse Future Branches, and Avatar IK bones.
     /// Operates with zero runtime garbage generation and automatic procedural simulation fallback.
     /// </summary>
     [DisallowMultipleComponent]
-    public class OmniGenesisClient : MonoBehaviour
+    public class OmniGenesisClient : MonoBehaviour, IOmniInputSource
     {
         public const int SplatCount = 65536;
         public const int MultiverseBranches = 5;
@@ -30,6 +31,26 @@ namespace OmniGenesis.Core
         [SerializeField] private Transform hmdTransform;
         [SerializeField] private Transform leftHandTransform;
         [SerializeField] private Transform rightHandTransform;
+
+        // IOmniInputSource Implementation
+        public Pose HeadPose => hmdTransform != null 
+            ? new Pose(hmdTransform.position, hmdTransform.rotation) 
+            : new Pose(new Vector3(0, 1.6f, 0), Quaternion.identity);
+
+        public Pose LeftHandPose => leftHandTransform != null 
+            ? new Pose(leftHandTransform.position, leftHandTransform.rotation) 
+            : new Pose(new Vector3(-0.2f, 1.2f, 0.4f), Quaternion.identity);
+
+        public Pose RightHandPose => rightHandTransform != null 
+            ? new Pose(rightHandTransform.position, rightHandTransform.rotation) 
+            : new Pose(new Vector3(0.2f, 1.2f, 0.4f), Quaternion.identity);
+
+        public Ray GazeRay => hmdTransform != null 
+            ? new Ray(hmdTransform.position, hmdTransform.forward) 
+            : new Ray(new Vector3(0, 1.6f, 0), Vector3.forward);
+
+        public float EyelidAperture => Mathf.Clamp01(1.0f - AvatarBlink);
+        public OmniGestureState ActiveGesture { get; private set; } = OmniGestureState.NONE;
 
         // GPU Compute Buffers
         public ComputeBuffer PositionBuffer { get; private set; }
@@ -55,7 +76,7 @@ namespace OmniGenesis.Core
         private bool isConnected = false;
         private readonly byte[] receiveBuffer = new byte[8192];
 
-        // Interaction States (Driven by Omni3DUIController)
+        // Interaction States (Driven by Omni3DUIController or OmniEventBus)
         public float MaterialStiffness { get; set; } = 1.0f;
         public bool IsMatterWeaveActive { get; set; } = false;
         public bool IsJointGazeHandoffActive { get; set; } = false;
@@ -65,6 +86,51 @@ namespace OmniGenesis.Core
         public Vector3 AvatarHandPosition { get; private set; } = new Vector3(0.25f, 1.1f, 1.4f);
         public Vector3 AvatarGazeTarget { get; private set; } = Vector3.zero;
         public float AvatarBlink { get; private set; } = 0.0f;
+
+        private void OnEnable()
+        {
+            OmniEventBus.OnGestureStateChanged += HandleGestureStateChanged;
+            OmniEventBus.OnMaterialTypeOverride += HandleMaterialTypeOverride;
+            OmniEventBus.OnTimeScrubDelta += HandleTimeScrubDelta;
+            OmniEventBus.OnAvatarHandTargetUpdated += HandleAvatarHandTargetUpdated;
+        }
+
+        private void OnDisable()
+        {
+            OmniEventBus.OnGestureStateChanged -= HandleGestureStateChanged;
+            OmniEventBus.OnMaterialTypeOverride -= HandleMaterialTypeOverride;
+            OmniEventBus.OnTimeScrubDelta -= HandleTimeScrubDelta;
+            OmniEventBus.OnAvatarHandTargetUpdated -= HandleAvatarHandTargetUpdated;
+        }
+
+        private void HandleGestureStateChanged(OmniGestureState state)
+        {
+            ActiveGesture = state;
+            if (state == OmniGestureState.MATTER_WEAVE) IsMatterWeaveActive = true;
+            else if (state != OmniGestureState.MATTER_WEAVE && IsMatterWeaveActive) IsMatterWeaveActive = false;
+
+            if (state == OmniGestureState.JOINT_GAZE_HANDOFF) IsJointGazeHandoffActive = true;
+            else if (state != OmniGestureState.JOINT_GAZE_HANDOFF && IsJointGazeHandoffActive) IsJointGazeHandoffActive = false;
+        }
+
+        private void HandleMaterialTypeOverride(int splatIdx, OmniMaterialType mat)
+        {
+            if (splatIdx >= 0 && splatIdx < SplatCount && nativeMaterialIds.IsCreated && MaterialIdBuffer != null)
+            {
+                nativeMaterialIds[splatIdx] = (int)mat;
+                MaterialIdBuffer.SetData(nativeMaterialIds, splatIdx, splatIdx, 1);
+            }
+        }
+
+        private void HandleTimeScrubDelta(float delta)
+        {
+            // Multiverse timeline scrubbing offset
+        }
+
+        private void HandleAvatarHandTargetUpdated(Vector3 target)
+        {
+            AvatarHandPosition = target;
+        }
 
         private void Awake()
         {
@@ -216,10 +282,14 @@ namespace OmniGenesis.Core
                     Vector3 hmdPos = hmdTransform != null ? hmdTransform.position : new Vector3(0, 1.6f, 0);
                     Vector3 leftPos = leftHandTransform != null ? leftHandTransform.position : new Vector3(-0.2f, 1.2f, 0.4f);
                     Vector3 rightPos = rightHandTransform != null ? rightHandTransform.position : new Vector3(0.2f, 1.2f, 0.4f);
+                    Vector3 gazeDir = hmdTransform != null ? hmdTransform.forward : Vector3.forward;
 
                     string payload = $"{{\"hmdPos\":[{hmdPos.x:F3},{hmdPos.y:F3},{hmdPos.z:F3}]," +
                                      $"\"handLPos\":[{leftPos.x:F3},{leftPos.y:F3},{leftPos.z:F3}]," +
                                      $"\"handRPos\":[{rightPos.x:F3},{rightPos.y:F3},{rightPos.z:F3}]," +
+                                     $"\"gazeDir\":[{gazeDir.x:F3},{gazeDir.y:F3},{gazeDir.z:F3}]," +
+                                     $"\"aperture\":{EyelidAperture:F2}," +
+                                     $"\"gesture\":{(int)ActiveGesture}," +
                                      $"\"stiffness\":{MaterialStiffness:F2}," +
                                      $"\"matterWeave\":{(IsMatterWeaveActive ? "true" : "false")}," +
                                      $"\"handoff\":{(IsJointGazeHandoffActive ? "true" : "false")}}}";

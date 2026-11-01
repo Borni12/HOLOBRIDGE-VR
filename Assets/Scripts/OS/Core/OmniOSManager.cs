@@ -12,6 +12,7 @@ using OmniOS.Apps.MediaHub;
 using OmniOS.Apps.Scenery;
 using OmniOS.Environment;
 using OmniOS.Interaction;
+using OmniGenesis.Core;
 
 namespace OmniOS.Core
 {
@@ -79,9 +80,10 @@ namespace OmniOS.Core
             }
             instance = this;
 
-            if (userHead == null && Camera.main != null)
+            if (userHead == null)
             {
-                userHead = Camera.main.transform;
+                var cam = OmniInputHelper.ResolveActiveCamera();
+                if (cam != null) userHead = cam.transform;
             }
 
             InitializeCoreSubsystems();
@@ -281,10 +283,39 @@ namespace OmniOS.Core
                 toastTimer -= Time.deltaTime;
             }
 
-            // Global Shortcuts
-            if (Input.GetKeyDown(KeyCode.H)) ToggleCleanView();
-            if (Input.GetKeyDown(KeyCode.Space)) RecenterAll();
-            if (Input.GetKeyDown(KeyCode.T))
+            // 1. 5D Flagship Innovations Shortcuts
+            if (OmniInputHelper.CheckP())
+            {
+                var exp = OmniGenesis5DExperience.Instance ?? GetComponent<OmniGenesis5DExperience>() ?? gameObject.AddComponent<OmniGenesis5DExperience>();
+                exp.TriggerRealityPeel();
+            }
+            if (OmniInputHelper.CheckM())
+            {
+                var exp = OmniGenesis5DExperience.Instance ?? GetComponent<OmniGenesis5DExperience>() ?? gameObject.AddComponent<OmniGenesis5DExperience>();
+                int next = ((int)exp.CurrentStiffness + 1) % 3;
+                exp.SetStiffness((OmniGenesis5DExperience.MaterialStiffness)next);
+            }
+            if (OmniInputHelper.CheckO())
+            {
+                var exp = OmniGenesis5DExperience.Instance ?? GetComponent<OmniGenesis5DExperience>() ?? gameObject.AddComponent<OmniGenesis5DExperience>();
+                exp.ToggleMultiverseOrbs();
+            }
+            if (OmniInputHelper.CheckJ())
+            {
+                var exp = OmniGenesis5DExperience.Instance ?? GetComponent<OmniGenesis5DExperience>() ?? gameObject.AddComponent<OmniGenesis5DExperience>();
+                exp.TriggerHandoff();
+            }
+
+            // 2. Full Reload & Auto-Save Shortcut (R or F5)
+            if (OmniInputHelper.CheckR())
+            {
+                FullSystemReload();
+            }
+
+            // 3. System Utilities
+            if (OmniInputHelper.CheckSpace()) RecenterAll();
+            if (OmniInputHelper.CheckH()) ToggleCleanView();
+            if (OmniInputHelper.CheckT())
             {
                 metaverseEnv?.NextTheme();
                 SpatialAudioEngine.Instance?.PlayThemeChime();
@@ -295,16 +326,53 @@ namespace OmniOS.Core
                 ShowNotificationToast($"2D Screen Overlay: {(Show2DOverlay ? "ON" : "OFF")}");
             }
 
-            // Number key shortcuts to toggle apps
-            if (Input.GetKeyDown(KeyCode.Alpha1)) ToggleApp("media_hub");
-            if (Input.GetKeyDown(KeyCode.Alpha2)) ToggleApp("scenery");
-            if (Input.GetKeyDown(KeyCode.Alpha3)) ToggleApp("camera");
-            if (Input.GetKeyDown(KeyCode.Alpha4)) ToggleApp("gallery");
-            if (Input.GetKeyDown(KeyCode.Alpha5)) ToggleApp("video_reality");
-            if (Input.GetKeyDown(KeyCode.Alpha6)) ToggleApp("matter_weave");
-            if (Input.GetKeyDown(KeyCode.Alpha7)) ToggleApp("multiverse");
-            if (Input.GetKeyDown(KeyCode.Alpha8)) ToggleApp("spatial_canvas");
-            if (Input.GetKeyDown(KeyCode.Alpha9)) ToggleApp("settings");
+            // 4. Number key shortcuts to toggle apps (1 to 9)
+            if (OmniInputHelper.CheckAlphaKey(1)) ToggleApp("media_hub");
+            if (OmniInputHelper.CheckAlphaKey(2)) ToggleApp("scenery");
+            if (OmniInputHelper.CheckAlphaKey(3)) ToggleApp("camera");
+            if (OmniInputHelper.CheckAlphaKey(4)) ToggleApp("gallery");
+            if (OmniInputHelper.CheckAlphaKey(5)) ToggleApp("video_reality");
+            if (OmniInputHelper.CheckAlphaKey(6)) ToggleApp("matter_weave");
+            if (OmniInputHelper.CheckAlphaKey(7)) ToggleApp("multiverse");
+            if (OmniInputHelper.CheckAlphaKey(8)) ToggleApp("spatial_canvas");
+            if (OmniInputHelper.CheckAlphaKey(9)) ToggleApp("settings");
+        }
+
+        public void FullSystemReload()
+        {
+            Debug.Log("<color=#00e5ff>[OmniOS Full Reload]</color> Executing Full System Reload & Auto-Save...");
+
+            // 1. Resolve Active Camera
+            Camera activeCam = OmniInputHelper.ResolveActiveCamera();
+            if (activeCam != null) userHead = activeCam.transform;
+
+            // 2. Rebuild All 5D Neural Innovations
+            var exp5D = OmniGenesis5DExperience.Instance ?? GetComponent<OmniGenesis5DExperience>() ?? gameObject.AddComponent<OmniGenesis5DExperience>();
+            exp5D.RebuildAll5DSystems();
+
+            // 3. Recenter View and Snap Dock
+            RecenterAll();
+
+            // 4. Play harmonic chime and notify user
+            SpatialAudioEngine.Instance?.PlayThemeChime();
+            ShowNotificationToast("⚡ FULL SYSTEM RELOAD: All 5D Systems & Spatial Apps Re-initialized!");
+
+#if UNITY_EDITOR
+            // Trigger Scene Auto-Save in Editor
+            try
+            {
+                var activeScene = UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene();
+                if (!string.IsNullOrEmpty(activeScene.path))
+                {
+                    UnityEditor.SceneManagement.EditorSceneManager.SaveScene(activeScene);
+                    Debug.Log($"<color=#00ff88>[OmniAutoSave]</color> Scene '{activeScene.name}' auto-saved during Full Reload!");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[OmniAutoSave] Note: " + ex.Message);
+            }
+#endif
         }
 
         public void RecenterAll()
@@ -353,6 +421,7 @@ namespace OmniOS.Core
             activeToastMessage = message;
             toastTimer = ToastDuration;
             SpatialAudioEngine.Instance?.PlayNotificationChime();
+            Debug.Log($"<color=#00e5ff>[OmniOS Toast]</color> {message}");
         }
 
         public void ToggleApp(string appId)
@@ -364,11 +433,13 @@ namespace OmniOS.Core
                     MinimizeAllExcept(appId);
                     window.Restore();
                     SpatialAudioEngine.Instance?.PlayWindowOpen();
+                    Debug.Log($"<color=#00e5ff>[OmniOS App]</color> 📱 {window.AppTitle} Restored to front");
                 }
                 else
                 {
                     window.Minimize();
                     SpatialAudioEngine.Instance?.PlayWindowMinimize();
+                    Debug.Log($"<color=#00e5ff>[OmniOS App]</color> 📱 {window.AppTitle} Minimized");
                 }
             }
         }
@@ -446,6 +517,8 @@ namespace OmniOS.Core
 
         private void OnGUI()
         {
+            OmniInputHelper.RegisterGUIEvent(Event.current);
+
             // Only render notification toast, zero clutter
             if (toastTimer > 0f)
             {

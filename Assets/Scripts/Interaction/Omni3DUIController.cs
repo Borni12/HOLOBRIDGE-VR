@@ -66,6 +66,7 @@ namespace OmniGenesis.Interaction
     /// 2. MatterWeaveManipulator (Gaze cone selection + wrist-tuned continuum stiffness k in [Rigid, Elastic, Fluid])
     /// 3. MultiverseOrbSelector (Toroidal 5-branch phase-space time scrubber)
     /// 4. JointGazeHandoff (Bayesian gaze-hand intention prediction for avatar physical exchange)
+    /// Strictly integrates with OmniGenesis.Core.OmniEventBus.
     /// </summary>
     [DisallowMultipleComponent]
     public class Omni3DUIController : MonoBehaviour
@@ -90,6 +91,7 @@ namespace OmniGenesis.Interaction
 
         // Metaphor 1: Reality-Peel State
         public float RealityPeelProgress { get; private set; } = 0.0f; // 0 = 2D portal, 1 = 360 3D world
+        public bool IsPeeling => isPeeling;
         private bool isPeeling = false;
 
         // Metaphor 2: Matter-Weave State
@@ -105,6 +107,7 @@ namespace OmniGenesis.Interaction
         public bool IsHandoffEngaged { get; private set; } = false;
 
         private Vector3 prevRightHandPos;
+        private OmniGestureState currentPublishedGesture = OmniGestureState.NONE;
 
         private void Awake()
         {
@@ -144,12 +147,43 @@ namespace OmniGenesis.Interaction
             // 4. Evaluate Joint-Gaze Handoff Metaphor
             UpdateJointGazeHandoff(filteredHead, filteredRight, rightVel.magnitude);
 
-            // Push active states to client synchronizer
+            // Resolve Active Gesture & Broadcast via OmniEventBus
+            ResolveAndBroadcastGesture();
+
+            // Push active states to client synchronizer for backward compatibility
             if (client != null)
             {
                 client.MaterialStiffness = CurrentStiffness;
                 client.IsMatterWeaveActive = IsMatterWeaveActive;
                 client.IsJointGazeHandoffActive = IsHandoffEngaged;
+            }
+        }
+
+        private void ResolveAndBroadcastGesture()
+        {
+            OmniGestureState targetState = OmniGestureState.NONE;
+
+            if (isPeeling)
+            {
+                targetState = OmniGestureState.REALITY_PEEL;
+            }
+            else if (IsHandoffEngaged)
+            {
+                targetState = OmniGestureState.JOINT_GAZE_HANDOFF;
+            }
+            else if (IsMatterWeaveActive)
+            {
+                targetState = OmniGestureState.MATTER_WEAVE;
+            }
+            else if (AreMultiverseOrbsVisible)
+            {
+                targetState = OmniGestureState.CHRONO_AURA;
+            }
+
+            if (targetState != currentPublishedGesture)
+            {
+                currentPublishedGesture = targetState;
+                OmniEventBus.PublishGesture(currentPublishedGesture);
             }
         }
 
@@ -195,6 +229,10 @@ namespace OmniGenesis.Interaction
                 // Map wrist roll [-45, +45] to stiffness [0=Fluid, 1=Elastic, 2=Rigid]
                 float normRoll = Mathf.Clamp((wristRoll + 45f) / 90f, 0f, 2f);
                 CurrentStiffness = normRoll;
+
+                // Map to discrete material type for event bus
+                OmniMaterialType matType = normRoll < 0.65f ? OmniMaterialType.Fluid : (normRoll < 1.35f ? OmniMaterialType.Elastic : OmniMaterialType.Rigid);
+                OmniEventBus.PublishMaterial(0, matType);
             }
 
             // Engage matter-weave when dominant hand is within object proximity
@@ -219,6 +257,7 @@ namespace OmniGenesis.Interaction
                     if (Vector3.Distance(rightPos, orbPos) < multiversePullThreshold)
                     {
                         SelectedTimelineBranch = i;
+                        OmniEventBus.PublishTimeScrub((float)i);
                         TriggerHapticImpulse(0.5f, 0.03f);
                         break;
                     }
@@ -228,11 +267,9 @@ namespace OmniGenesis.Interaction
 
         private void UpdateJointGazeHandoff(Vector3 headPos, Vector3 rightHandPos, float handSpeed)
         {
-            if (client == null) return;
-
             Vector3 gazeForward = headCamera != null ? headCamera.forward : Vector3.forward;
-            Vector3 avatarHead = client.AvatarHeadPosition;
-            Vector3 avatarHand = client.AvatarHandPosition;
+            Vector3 avatarHead = client != null ? client.AvatarHeadPosition : new Vector3(0, 1.6f, 1.8f);
+            Vector3 avatarHand = client != null ? client.AvatarHandPosition : new Vector3(0.25f, 1.1f, 1.4f);
 
             // Bayesian Intention Prior: Gaze alignment toward avatar eyes + static offering gesture
             Vector3 toAvatarHead = (avatarHead - headPos).normalized;
@@ -250,6 +287,7 @@ namespace OmniGenesis.Interaction
             if (HandoffIntentionScore > 0.72f && !IsHandoffEngaged)
             {
                 IsHandoffEngaged = true;
+                OmniEventBus.PublishAvatarTarget(rightHandPos);
                 TriggerHapticImpulse(0.85f, 0.06f);
             }
             else if (HandoffIntentionScore < 0.40f)

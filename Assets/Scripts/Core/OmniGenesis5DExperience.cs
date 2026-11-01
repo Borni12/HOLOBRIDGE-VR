@@ -86,9 +86,10 @@ namespace OmniGenesis.Core
             }
             instance = this;
 
-            if (headCamera == null && Camera.main != null)
+            Camera cam = OmniInputHelper.ResolveActiveCamera();
+            if (cam != null)
             {
-                headCamera = Camera.main.transform;
+                headCamera = cam.transform;
             }
 
             if (pointer == null)
@@ -97,12 +98,12 @@ namespace OmniGenesis.Core
             }
 
             // Ensure Vestibular Shield on Main Camera
-            if (Camera.main != null)
+            if (cam != null)
             {
-                vestibularShield = Camera.main.GetComponent<VestibularShieldPass>();
+                vestibularShield = cam.GetComponent<VestibularShieldPass>();
                 if (vestibularShield == null)
                 {
-                    vestibularShield = Camera.main.gameObject.AddComponent<VestibularShieldPass>();
+                    vestibularShield = cam.gameObject.AddComponent<VestibularShieldPass>();
                 }
             }
         }
@@ -110,6 +111,21 @@ namespace OmniGenesis.Core
         private void Start()
         {
             BuildAll5DSystems();
+        }
+
+        public void RebuildAll5DSystems()
+        {
+            if (realityPeelRoot != null) Destroy(realityPeelRoot);
+            if (matterWeaveRoot != null) Destroy(matterWeaveRoot);
+            if (multiverseOrbsRoot != null) Destroy(multiverseOrbsRoot);
+            if (avatarHandoffRoot != null) Destroy(avatarHandoffRoot);
+            if (gaussianSplatsRoot != null) Destroy(gaussianSplatsRoot);
+
+            Camera cam = OmniInputHelper.ResolveActiveCamera();
+            if (cam != null) headCamera = cam.transform;
+
+            BuildAll5DSystems();
+            OmniOSManager.Instance?.ShowNotificationToast("⚡ 5D Neural Systems Rebuilt & Centered in front of view!");
         }
 
         private void BuildAll5DSystems()
@@ -164,6 +180,7 @@ namespace OmniGenesis.Core
             if (portalShader == null) portalShader = Shader.Find("Sprites/Default");
             portalMaterial = new Material(portalShader);
             portalMaterial.color = new Color(0.1f, 0.75f, 1.0f, 0.95f);
+            portalMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
 
             // Create procedural preview texture
             Texture2D tex = GenerateNeuralPreviewTexture();
@@ -211,8 +228,11 @@ namespace OmniGenesis.Core
         public void TriggerRealityPeel()
         {
             isPeelActive = !isPeelActive;
+            if (isPeelActive) FocusRealityPeel();
             SpatialAudioEngine.Instance?.PlayThemeChime();
-            OmniOSManager.Instance?.ShowNotificationToast(isPeelActive ? "🌌 Reality-Peel Activated: Unprojecting 360° Gaussian Space!" : "🖼️ Reality-Peel Compressed back to 2D Portal.");
+            string msg = isPeelActive ? "🌌 Reality-Peel Activated: Unprojecting 360° Gaussian Space!" : "🖼️ Reality-Peel Compressed back to 2D Portal.";
+            OmniOSManager.Instance?.ShowNotificationToast(msg);
+            Debug.Log($"<color=#00e5ff>[OMNI 5D]</color> 🔮 Reality-Peel (P): {(isPeelActive ? "UNPROJECTED 360°" : "2D PORTAL")}");
         }
 
         public void ResetRealityPeel()
@@ -225,6 +245,7 @@ namespace OmniGenesis.Core
                 portalTransform.position = initialPortalPos;
             }
             SpatialAudioEngine.Instance?.PlayButtonClick();
+            Debug.Log("<color=#00e5ff>[OMNI 5D]</color> ↺ Reality-Peel Frame Reset");
         }
 
         public bool IsPeelActive => isPeelActive;
@@ -234,7 +255,11 @@ namespace OmniGenesis.Core
 
         public void FocusRealityPeel()
         {
-            if (headCamera == null && Camera.main != null) headCamera = Camera.main.transform;
+            if (headCamera == null)
+            {
+                Camera cam = OmniInputHelper.ResolveActiveCamera();
+                if (cam != null) headCamera = cam.transform;
+            }
             if (headCamera != null && realityPeelRoot != null)
             {
                 Vector3 headPos = headCamera.position;
@@ -252,7 +277,11 @@ namespace OmniGenesis.Core
 
         public void FocusMatterWeaveLab()
         {
-            if (headCamera == null && Camera.main != null) headCamera = Camera.main.transform;
+            if (headCamera == null)
+            {
+                Camera cam = OmniInputHelper.ResolveActiveCamera();
+                if (cam != null) headCamera = cam.transform;
+            }
             if (headCamera != null && matterWeaveRoot != null)
             {
                 Vector3 headPos = headCamera.position;
@@ -269,7 +298,11 @@ namespace OmniGenesis.Core
 
         public void FocusMultiverseOrbs()
         {
-            if (headCamera == null && Camera.main != null) headCamera = Camera.main.transform;
+            if (headCamera == null)
+            {
+                Camera cam = OmniInputHelper.ResolveActiveCamera();
+                if (cam != null) headCamera = cam.transform;
+            }
             if (headCamera != null && multiverseOrbsRoot != null)
             {
                 Vector3 headPos = headCamera.position;
@@ -288,7 +321,11 @@ namespace OmniGenesis.Core
 
         public void FocusAvatar()
         {
-            if (headCamera == null && Camera.main != null) headCamera = Camera.main.transform;
+            if (headCamera == null)
+            {
+                Camera cam = OmniInputHelper.ResolveActiveCamera();
+                if (cam != null) headCamera = cam.transform;
+            }
             if (headCamera != null && avatarHandoffRoot != null)
             {
                 Vector3 headPos = headCamera.position;
@@ -380,10 +417,12 @@ namespace OmniGenesis.Core
         public void SetStiffness(MaterialStiffness stiffness)
         {
             currentStiffness = stiffness;
+            FocusMatterWeaveLab();
             ApplyStiffnessVisuals();
             TriggerMatterSquish();
             SpatialAudioEngine.Instance?.PlayButtonClick();
             OmniOSManager.Instance?.ShowNotificationToast($"⚛️ Matter-Weave: Stiffness tuned to [{currentStiffness}]!");
+            Debug.Log($"<color=#00ff88>[OMNI 5D]</color> ⚛️ Matter-Weave (M): Continuum stiffness changed to [{currentStiffness}]");
         }
 
         private void ApplyStiffnessVisuals()
@@ -499,6 +538,7 @@ namespace OmniGenesis.Core
             if (multiverseOrbsRoot != null) multiverseOrbsRoot.SetActive(areOrbsVisible);
             SpatialAudioEngine.Instance?.PlayButtonClick();
             OmniOSManager.Instance?.ShowNotificationToast($"🔮 Multiverse Orbs: {(areOrbsVisible ? "Visible" : "Hidden")}");
+            Debug.Log($"<color=#ff77ff>[OMNI 5D]</color> ⏳ Multiverse Orbs (O): {(areOrbsVisible ? "VISIBLE" : "HIDDEN")} [Timeline {activeTimelineIndex + 1}]");
         }
         #endregion
 
@@ -597,6 +637,7 @@ namespace OmniGenesis.Core
             handoffProgress = 0f;
             SpatialAudioEngine.Instance?.PlayNotificationChime();
             OmniOSManager.Instance?.ShowNotificationToast("🤝 Avatar Sophia: Gaze locked! Extending arm to receive object.");
+            Debug.Log("<color=#ffd700>[OMNI 5D]</color> 🤝 Avatar Sophia Handoff (J): Gaze locked, reaching forward via procedural IK!");
         }
         #endregion
 
@@ -711,6 +752,11 @@ namespace OmniGenesis.Core
                         matterOriginalScale.z * (1f + factor * 0.8f)
                     );
                 }
+                else if (currentStiffness == MaterialStiffness.Rigid)
+                {
+                    float rigidVibe = Mathf.Sin(squishTimer * Mathf.PI * 18f) * 0.08f;
+                    matterObjectTransform.localScale = matterOriginalScale * (1f + rigidVibe);
+                }
             }
             else
             {
@@ -788,40 +834,101 @@ namespace OmniGenesis.Core
 
         private void HandleGlobalShortcuts()
         {
-            // P = Reality-Peel
-            if (Input.GetKeyDown(KeyCode.P)) TriggerRealityPeel();
+            // If OmniOSManager is active in scene, let the OS master kernel manage global keys to prevent double-firing
+            if (OmniOSManager.Instance != null) return;
+
+            // P = Reality-Peel (Dual-mode detection via OmniInputHelper)
+            if (OmniInputHelper.CheckP()) TriggerRealityPeel();
 
             // M = Cycle Matter-Weave stiffness
-            if (Input.GetKeyDown(KeyCode.M))
+            if (OmniInputHelper.CheckM())
             {
                 int next = ((int)currentStiffness + 1) % 3;
                 SetStiffness((MaterialStiffness)next);
             }
 
             // O = Toggle Multiverse Orbs
-            if (Input.GetKeyDown(KeyCode.O)) ToggleMultiverseOrbs();
+            if (OmniInputHelper.CheckO()) ToggleMultiverseOrbs();
 
             // J = Trigger Joint-Gaze Handoff
-            if (Input.GetKeyDown(KeyCode.J)) TriggerHandoff();
+            if (OmniInputHelper.CheckJ()) TriggerHandoff();
+
+            // R = Full Rebuild 5D Systems
+            if (OmniInputHelper.CheckR()) RebuildAll5DSystems();
         }
 
         private void OnGUI()
         {
-            // High-Contrast Sleek 5D HUD Overlay (Top-Left)
-            float hudW = 340f;
-            float hudH = 175f;
-            float x = 20f;
-            float y = 20f;
+            OmniInputHelper.RegisterGUIEvent(Event.current);
+            GUI.skin.button.richText = true;
+            GUI.skin.label.richText = true;
+            GUI.skin.box.richText = true;
 
+            // High-Contrast Interactive 5D HUD Overlay (Top-Left)
+            float hudW = 360f;
+            float hudH = 245f;
+            float x = 16f;
+            float y = 16f;
+
+            GUI.color = new Color(0.04f, 0.08f, 0.14f, 0.94f);
             GUI.Box(new Rect(x, y, hudW, hudH), "");
+            GUI.color = Color.white;
+
             GUILayout.BeginArea(new Rect(x + 10, y + 8, hudW - 20, hudH - 16));
 
             GUILayout.Label("<b><color=#00e5ff>⚡ OMNI-GENESIS 5D ARCHITECTURE</color></b>");
-            GUILayout.Label($"<b>1. Reality-Peel:</b> {(isPeelActive ? "<color=#00ff88>UNPROJECTED 360°</color>" : "<color=#ffaa00>2D Portal Frame</color>")} (Press 'P')");
-            GUILayout.Label($"<b>2. Matter-Weave:</b> <color=#00e5ff>[{currentStiffness}]</color> (Press 'M')");
-            GUILayout.Label($"<b>3. Multiverse Orbs:</b> <color=#ff77ff>[Active: Timeline {activeTimelineIndex + 1}]</color> (Press 'O')");
-            GUILayout.Label($"<b>4. Avatar Sophia:</b> {(isHandoffActive ? "<color=#00ff88>REACHING IK...</color>" : "Gaze Tracking User")} (Press 'J')");
-            GUILayout.Label($"<b>5. Vestibular Shield:</b> <color=#00ff88>ACTIVE (0-Cybersickness)</color>");
+            GUILayout.Space(2);
+
+            // 1. Reality-Peel Button
+            GUI.color = isPeelActive ? new Color(0.1f, 1.0f, 0.6f) : new Color(0.0f, 0.85f, 1.0f);
+            string peelLabel = isPeelActive ? "🔮 1. Reality-Peel: [UNPROJECTED 360°] (P)" : "🔮 1. Reality-Peel: [2D Portal Frame] (P)";
+            if (GUILayout.Button(peelLabel, GUILayout.Height(28)))
+            {
+                TriggerRealityPeel();
+            }
+
+            // 2. Matter-Weave Button
+            GUI.color = new Color(0.2f, 0.95f, 0.95f);
+            string matterLabel = $"⚛️ 2. Matter-Weave: [{currentStiffness.ToString().ToUpper()}] (M)";
+            if (GUILayout.Button(matterLabel, GUILayout.Height(28)))
+            {
+                int next = ((int)currentStiffness + 1) % 3;
+                SetStiffness((MaterialStiffness)next);
+            }
+
+            // 3. Multiverse Orbs Button
+            GUI.color = new Color(1.0f, 0.65f, 1.0f);
+            string orbsLabel = $"⏳ 3. Multiverse Orbs: [Timeline {activeTimelineIndex + 1}/5] (O)";
+            if (GUILayout.Button(orbsLabel, GUILayout.Height(28)))
+            {
+                ToggleMultiverseOrbs();
+            }
+
+            // 4. Avatar Sophia Button
+            GUI.color = isHandoffActive ? new Color(0.2f, 1.0f, 0.5f) : new Color(1.0f, 0.85f, 0.2f);
+            string handoffLabel = isHandoffActive ? "🤝 4. Sophia: [REACHING IK HANDOFF...] (J)" : "🤝 4. Sophia Handoff: [Ready] (J)";
+            if (GUILayout.Button(handoffLabel, GUILayout.Height(28)))
+            {
+                TriggerHandoff();
+            }
+
+            // 5. Full Reload & Auto-Save Button
+            GUI.color = new Color(0.0f, 0.95f, 1.0f);
+            if (GUILayout.Button("🔄 <b>FULL SYSTEM RELOAD & AUTO-SAVE (R)</b>", GUILayout.Height(32)))
+            {
+                if (OmniOSManager.Instance != null)
+                {
+                    OmniOSManager.Instance.FullSystemReload();
+                }
+                else
+                {
+                    RebuildAll5DSystems();
+                }
+            }
+            GUI.color = Color.white;
+
+            GUILayout.Space(2);
+            GUILayout.Label("<color=#88aacc><size=11>Tip: Click buttons or press keys (P, M, O, J, R, Space, Tab)</size></color>");
 
             GUILayout.EndArea();
         }

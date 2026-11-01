@@ -71,9 +71,10 @@ namespace OmniOS.Interaction
 
         private void Awake()
         {
-            if (headCameraTransform == null && Camera.main != null)
+            if (headCameraTransform == null)
             {
-                headCameraTransform = Camera.main.transform;
+                var cam = OmniGenesis.Core.OmniInputHelper.ResolveActiveCamera();
+                if (cam != null) headCameraTransform = cam.transform;
             }
 
             // Dynamically locate RightHand controller if not wired in Inspector
@@ -138,13 +139,39 @@ namespace OmniOS.Interaction
 
         private void UpdateDesktopNavigation()
         {
+            if (headCameraTransform == null)
+            {
+                var cam = OmniGenesis.Core.OmniInputHelper.ResolveActiveCamera();
+                if (cam != null) headCameraTransform = cam.transform;
+            }
             if (!enableDesktopControls || headCameraTransform == null) return;
 
             // Right-click drag to look around the Metaverse room
-            if (Input.GetMouseButton(1))
+            bool isLooking = false;
+            try { isLooking = Input.GetMouseButton(1); } catch { }
+            try
             {
-                float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
-                float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
+                var mouse = UnityEngine.InputSystem.Mouse.current;
+                if (mouse != null && mouse.rightButton.isPressed) isLooking = true;
+            } catch { }
+
+            if (isLooking)
+            {
+                float mouseX = 0f;
+                float mouseY = 0f;
+                try
+                {
+                    mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
+                    mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
+                } catch {
+                    var mouse = UnityEngine.InputSystem.Mouse.current;
+                    if (mouse != null)
+                    {
+                        Vector2 d = mouse.delta.ReadValue();
+                        mouseX = d.x * 0.1f * mouseSensitivity;
+                        mouseY = d.y * 0.1f * mouseSensitivity;
+                    }
+                }
 
                 cameraYaw += mouseX;
                 cameraPitch = Mathf.Clamp(cameraPitch - mouseY, -85f, 85f);
@@ -152,9 +179,25 @@ namespace OmniOS.Interaction
                 headCameraTransform.rotation = Quaternion.Euler(cameraPitch, cameraYaw, 0f);
             }
 
-            // WASD movement around the Metaverse lounge
-            float moveX = Input.GetAxis("Horizontal");
-            float moveZ = Input.GetAxis("Vertical");
+            // WASD and Arrow keys movement around the Metaverse lounge
+            float moveX = 0f;
+            float moveZ = 0f;
+            try
+            {
+                moveX = Input.GetAxis("Horizontal");
+                moveZ = Input.GetAxis("Vertical");
+            } catch { }
+
+            if (Mathf.Abs(moveX) < 0.01f)
+            {
+                if (Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.A)) moveX = -1f;
+                else if (Input.GetKey(KeyCode.RightArrow) || Input.GetKey(KeyCode.D)) moveX = 1f;
+            }
+            if (Mathf.Abs(moveZ) < 0.01f)
+            {
+                if (Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.S)) moveZ = -1f;
+                else if (Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.W)) moveZ = 1f;
+            }
 
             if (Mathf.Abs(moveX) > 0.01f || Mathf.Abs(moveZ) > 0.01f)
             {
@@ -198,8 +241,23 @@ namespace OmniOS.Interaction
             }
 
             // 2. Check Desktop Mouse Fallback
-            bool mouseLeft = Input.GetMouseButton(0);
-            bool mouseRight = Input.GetMouseButton(1);
+            bool mouseLeft = false;
+            bool mouseRight = false;
+            try
+            {
+                mouseLeft = Input.GetMouseButton(0);
+                mouseRight = Input.GetMouseButton(1);
+            } catch { }
+
+            try
+            {
+                var mouse = UnityEngine.InputSystem.Mouse.current;
+                if (mouse != null)
+                {
+                    if (mouse.leftButton.isPressed) mouseLeft = true;
+                    if (mouse.rightButton.isPressed) mouseRight = true;
+                }
+            } catch { }
 
             // If the 2D Apps Launcher Box is open on screen, block mouse clicks from piercing into 3D world behind it
             if (OmniAppLauncherBox.IsOpen && !isTrackingVRController)

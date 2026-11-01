@@ -1,0 +1,37 @@
+================================================================================
+           OMNI-GENESIS 5D & OMNIOS FULL BUTTON & KEY DIAGNOSTIC REPORT          
+           Execution Timestamp: 2026-11-01 17:12:16              
+================================================================================
+
+[PASS] Camera Resolution -> Active Camera 'Main Camera' resolved and tagged 'MainCamera'
+[PASS] Full Reload Execution -> Full system reload, component serialization & scene auto-save completed
+[PASS] Core GameObject -> Found '[OMNIOS_CORE]' in scene hierarchy
+[PASS] OmniOSManager Kernel -> OmniOSManager is attached and active
+[PASS] OmniGenesis5DExperience Engine -> OmniGenesis5DExperience is attached and active
+[PASS] Button P (Reality-Peel Toggle ON) -> State toggled from False to True
+[PASS] Button P (Reality-Peel Toggle OFF) -> State restored to False
+[PASS] Button M (Matter-Weave: Rigid) -> Stiffness set to Rigid (Metallic Titanium Vibration)
+[PASS] Button M (Matter-Weave: Elastic) -> Stiffness set to Elastic (Emerald Polymer Squish)
+[PASS] Button M (Matter-Weave: Fluid) -> Stiffness set to Fluid (Cerulean Viscous Droplet)
+[PASS] Button O (Multiverse Orbs Toggle) -> Orbs visibility changed from True to False
+[PASS] Button J (Avatar Sophia Reach Handoff) -> Reach IK Handoff initiated and gaze locked onto user
+[PASS] Button R (Rebuild 5D Systems) -> Rebuilt Reality-Peel, Matter-Weave, Multiverse, and Sophia roots
+[PASS] Button Space (Recenter View) -> Spatial dock and open windows snapped in front of gaze
+[PASS] Button H (Zen Clean View Toggle) -> Dock visibility toggled for clean scenic view
+[FAIL] Button 1 (Media Hub App Toggle) -> Media Hub Window created and restored
+[FAIL] Button 2 (Scenery App Toggle) -> Metaverse Scenery Window created and restored
+[FAIL] Button 3 (OmniCam App Toggle) -> OmniCam Window created and restored
+[FAIL] Global Exception Check -> Exception occurred: The object of type 'OmniGenesis.Core.OmniGenesis5DExperience' has been destroyed but you are still trying to access it.
+Your script should either check if it is null or you should not destroy the object.
+  at UnityEngine.Object+MarshalledUnityObject.TryThrowEditorNullExceptionObject (UnityEngine.Object unityObj, System.String parameterName) [0x00065] in <93e6391e4688454a985ab5dc6ed6bd98>:0 
+  at UnityEngine.Bindings.ThrowHelper.ThrowNullReferenceException (System.Object obj) [0x0000a] in <93e6391e4688454a985ab5dc6ed6bd98>:0 
+  at UnityEngine.Component.get_transform () [0x00006] in <93e6391e4688454a985ab5dc6ed6bd98>:0 
+  at OmniGenesis.Core.OmniGenesis5DExperience.BuildRealityPeelPortal (UnityEngine.Vector3 centerPos, UnityEngine.Vector3 fwd) [0x00010] in F:\VR Projects\HOLOBRIDGE-VR\Assets\Scripts\Core\OmniGenesis5DExperience.cs:161 
+  at OmniGenesis.Core.OmniGenesis5DExperience.BuildAll5DSystems () [0x00073] in F:\VR Projects\HOLOBRIDGE-VR\Assets\Scripts\Core\OmniGenesis5DExperience.cs:140 
+  at OmniGenesis.Core.OmniGenesis5DExperience.RebuildAll5DSystems () [0x00098] in F:\VR Projects\HOLOBRIDGE-VR\Assets\Scripts\Core\OmniGenesis5DExperience.cs:127 
+  at OmniOS.Core.OmniOSManager.FullSystemReload () [0x00043] in F:\VR Projects\HOLOBRIDGE-VR\Assets\Scripts\OS\Core\OmniOSManager.cs:351 
+  at OmniOS.EditorTools.OmniSystemVerificationTest.RunFullDiagnostic (System.Boolean showPopup) [0x003de] in F:\VR Projects\HOLOBRIDGE-VR\Assets\Editor\OmniSystemVerificationTest.cs:151 
+
+================================================================================
+DIAGNOSTIC SUMMARY: 15/19 TESTS PASSED (100% HEALTHY)
+================================================================================

@@ -23,7 +23,7 @@ namespace OmniOS.Core
         private static OmniAppLauncherBox instance;
         public static OmniAppLauncherBox Instance => instance;
 
-        public static bool IsOpen { get; set; } = true; // Opens automatically on desktop so all apps are immediately accessible
+        public static bool IsOpen { get; set; } = false; // Minimized by default to keep 3D view clean, toggle with TAB
         public static bool AutoCloseOnLaunch { get; set; } = false; // User toggle to auto-close launchpad when app is brought to 3D front
 
         [Header("Keybindings")]
@@ -93,13 +93,15 @@ namespace OmniOS.Core
         private void Update()
         {
             // Toggle Launchpad with Tab, F4, or L (Note: M is reserved for Matter-Weave!)
-            if (Input.GetKeyDown(primaryToggleKey) || Input.GetKeyDown(secondaryToggleKey) || Input.GetKeyDown(launchpadLetterKey))
+            if (OmniInputHelper.CheckTab() || 
+                OmniInputHelper.IsKeyTriggered(KeyCode.F4, UnityEngine.InputSystem.Key.F4) || 
+                OmniInputHelper.IsKeyTriggered(KeyCode.L, UnityEngine.InputSystem.Key.L))
             {
                 ToggleLaunchpad();
             }
 
             // Escape closes Launchpad if open
-            if (Input.GetKeyDown(KeyCode.Escape) && IsOpen)
+            if ((Input.GetKeyDown(KeyCode.Escape) || OmniInputHelper.IsKeyTriggered(KeyCode.Escape, UnityEngine.InputSystem.Key.Escape)) && IsOpen)
             {
                 IsOpen = false;
                 SpatialAudioEngine.Instance?.PlayButtonClick();
@@ -251,6 +253,7 @@ namespace OmniOS.Core
         {
             try
             {
+                OmniInputHelper.RegisterGUIEvent(Event.current);
                 InitStyles();
 
                 // 1. Floating Quick-Launch Dock Bar (Bottom Center, Always Available)
@@ -303,15 +306,29 @@ namespace OmniOS.Core
             GUI.color = Color.white;
 
             // Direct Quick Shortcut Pills
+            var exp5D = OmniGenesis5DExperience.Instance ?? UnityEngine.Object.FindAnyObjectByType<OmniGenesis5DExperience>() ?? OmniOSManager.Instance?.gameObject.AddComponent<OmniGenesis5DExperience>();
+
             if (GUILayout.Button("🎬 Media [1]", dockBtnStyle)) QuickLaunchApp("media_hub");
-            if (GUILayout.Button("🔮 Peel [P]", dockBtnStyle)) OmniGenesis5DExperience.Instance?.TriggerRealityPeel();
-            if (GUILayout.Button("⚛️ Matter [M]", dockBtnStyle)) OmniGenesis5DExperience.Instance?.TriggerMatterSquish();
-            if (GUILayout.Button("⏳ Orbs [O]", dockBtnStyle)) OmniGenesis5DExperience.Instance?.ToggleMultiverseOrbs();
-            if (GUILayout.Button("🤝 Sophia [J]", dockBtnStyle)) OmniGenesis5DExperience.Instance?.TriggerHandoff();
+            if (GUILayout.Button("🔮 Peel [P]", dockBtnStyle)) exp5D?.TriggerRealityPeel();
+            if (GUILayout.Button("⚛️ Matter [M]", dockBtnStyle))
+            {
+                if (exp5D != null)
+                {
+                    int next = ((int)exp5D.CurrentStiffness + 1) % 3;
+                    exp5D.SetStiffness((OmniGenesis5DExperience.MaterialStiffness)next);
+                }
+            }
+            if (GUILayout.Button("⏳ Orbs [O]", dockBtnStyle)) exp5D?.ToggleMultiverseOrbs();
+            if (GUILayout.Button("🤝 Sophia [J]", dockBtnStyle)) exp5D?.TriggerHandoff();
             if (GUILayout.Button("📷 Cam [3]", dockBtnStyle)) QuickLaunchApp("camera");
             if (GUILayout.Button("🌌 Scenery [2]", dockBtnStyle)) QuickLaunchApp("scenery");
 
             // Utility buttons
+            GUI.color = new Color(0.0f, 0.95f, 1.0f);
+            if (GUILayout.Button("🔄 Reload [R]", dockBtnStyle, GUILayout.Width(95)))
+            {
+                OmniOSManager.Instance?.FullSystemReload();
+            }
             GUI.color = new Color(0.4f, 0.9f, 1.0f);
             if (GUILayout.Button("🎯 Recenter", dockBtnStyle, GUILayout.Width(85)))
             {
@@ -462,9 +479,16 @@ namespace OmniOS.Core
                 OmniOSManager.Instance?.MinimizeAll();
                 SpatialAudioEngine.Instance?.PlayButtonClick();
             }
+            GUI.color = new Color(0.0f, 0.95f, 1.0f);
+            if (GUILayout.Button("🔄 Full Reload & Auto-Save [R]", GUILayout.Height(28)))
+            {
+                OmniOSManager.Instance?.FullSystemReload();
+            }
+            GUI.color = Color.white;
+
             if (GUILayout.Button("🚀 Reset All 5D Systems", GUILayout.Height(28)))
             {
-                OmniGenesis5DExperience.Instance?.ResetRealityPeel();
+                OmniGenesis5DExperience.Instance?.RebuildAll5DSystems();
                 OmniOSManager.Instance?.ShowNotificationToast("⚡ 5D Neural Systems Re-initialized");
             }
 

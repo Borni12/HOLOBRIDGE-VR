@@ -9,7 +9,7 @@ namespace OmniOS.EditorTools
 {
     public static class OmniOSSetupTool
     {
-        [MenuItem("Holobridge/Setup OmniOS in Current Scene", false, 1)]
+        [MenuItem("Holobridge/🔧 Legacy Setup OmniOS in Current Scene", false, 10)]
         public static void SetupOmniOS()
         {
             var activeScene = UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene();
