@@ -94,8 +94,9 @@ namespace OmniOS.Core
         {
             // Toggle Launchpad with Tab, F4, or L (Note: M is reserved for Matter-Weave!)
             if (OmniInputHelper.CheckTab() || 
-                OmniInputHelper.IsKeyTriggered(KeyCode.F4, UnityEngine.InputSystem.Key.F4) || 
-                OmniInputHelper.IsKeyTriggered(KeyCode.L, UnityEngine.InputSystem.Key.L))
+                OmniInputHelper.IsKeyTriggered(primaryToggleKey, UnityEngine.InputSystem.Key.Tab) ||
+                OmniInputHelper.IsKeyTriggered(secondaryToggleKey, UnityEngine.InputSystem.Key.F4) || 
+                OmniInputHelper.IsKeyTriggered(launchpadLetterKey, UnityEngine.InputSystem.Key.L))
             {
                 ToggleLaunchpad();
             }
@@ -308,7 +309,7 @@ namespace OmniOS.Core
             // Direct Quick Shortcut Pills
             var exp5D = OmniGenesis5DExperience.Instance ?? UnityEngine.Object.FindAnyObjectByType<OmniGenesis5DExperience>() ?? OmniOSManager.Instance?.gameObject.AddComponent<OmniGenesis5DExperience>();
 
-            if (GUILayout.Button("🎬 Media [1]", dockBtnStyle)) QuickLaunchApp("media_hub");
+            if (GUILayout.Button("📱 Android 15 [1]", dockBtnStyle)) QuickLaunchApp("media_hub");
             if (GUILayout.Button("🔮 Peel [P]", dockBtnStyle)) exp5D?.TriggerRealityPeel();
             if (GUILayout.Button("⚛️ Matter [M]", dockBtnStyle))
             {
@@ -821,12 +822,12 @@ namespace OmniOS.Core
             GUILayout.BeginVertical(cardStyle);
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label("🎬 <b>Media Hub (YouTube & FB)</b>", cardTitleStyle);
+            GUILayout.Label("📱 <b>Android 15 Tablet (Chrome & Internet)</b>", cardTitleStyle);
             GUILayout.Label("<color=#ffd700>[Key: 1]</color>", cardBadgeStyle, GUILayout.Width(75));
             GUILayout.EndHorizontal();
 
-            GUILayout.Label("<color=#00ff88>● FLAGSHIP METAVERSE CINEMA</color>", cardStatusStyle);
-            GUILayout.Label("Stream 4K cyber beats, space orbit, and social feeds directly inside your Metaverse lounge room.", cardDescStyle);
+            GUILayout.Label("<color=#00ff88>● LATEST ANDROID 15 (API 35) • INTERNET ACCESS ONLINE</color>", cardStatusStyle);
+            GUILayout.Label("Google Pixel Tablet Pro running latest Android 15 with live Chrome web browsing, Google Search, YouTube streaming, and 5G internet testing.", cardDescStyle);
             GUILayout.Space(4);
 
             GUILayout.BeginHorizontal();

@@ -80,7 +80,7 @@ namespace OmniOS.Interaction
             // Dynamically locate RightHand controller if not wired in Inspector
             if (rightHandTransform == null)
             {
-                var transforms = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsSortMode.None);
+                var transforms = UnityEngine.Object.FindObjectsByType<Transform>();
                 foreach (var t in transforms)
                 {
                     string n = t.name.ToLower();
@@ -157,6 +157,9 @@ namespace OmniOS.Interaction
 
             if (isLooking)
             {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+
                 float mouseX = 0f;
                 float mouseY = 0f;
                 try
@@ -177,6 +180,14 @@ namespace OmniOS.Interaction
                 cameraPitch = Mathf.Clamp(cameraPitch - mouseY, -85f, 85f);
 
                 headCameraTransform.rotation = Quaternion.Euler(cameraPitch, cameraYaw, 0f);
+            }
+            else
+            {
+                if (Cursor.lockState == CursorLockMode.Locked)
+                {
+                    Cursor.lockState = CursorLockMode.None;
+                    Cursor.visible = true;
+                }
             }
 
             // WASD and Arrow keys movement around the Metaverse lounge
@@ -275,26 +286,50 @@ namespace OmniOS.Interaction
 
         public Ray GetCurrentPointerRay()
         {
-            // If VR Controller is physically tracked
+            // 1. If VR Controller is physically tracked (Quest 3, Quest Pro, OpenXR)
             if (isTrackingVRController && rightHandTransform != null)
             {
                 return new Ray(rightHandTransform.position, rightHandTransform.forward);
             }
 
-            // Desktop Mouse Raycast
-            if (headCameraTransform != null)
+            // 2. Desktop Mouse Raycast (Windows, Mac, Linux, AR Touch)
+            Camera cam = null;
+            if (headCameraTransform != null) cam = headCameraTransform.GetComponent<Camera>();
+            if (cam == null) cam = Camera.main ?? OmniGenesis.Core.OmniInputHelper.ResolveActiveCamera() ?? UnityEngine.Object.FindAnyObjectByType<Camera>();
+
+            if (cam != null)
             {
-                Camera cam = headCameraTransform.GetComponent<Camera>();
-                if (cam != null)
+                Vector3 mousePos = Vector3.zero;
+                bool hasMouse = false;
+
+                try
                 {
-                    Vector3 mousePos = Input.mousePosition;
-                    if (mousePos.x >= 0 && mousePos.x <= Screen.width && mousePos.y >= 0 && mousePos.y <= Screen.height)
+                    var mouse = UnityEngine.InputSystem.Mouse.current;
+                    if (mouse != null)
                     {
-                        return cam.ScreenPointToRay(mousePos);
+                        Vector2 mVal = mouse.position.ReadValue();
+                        mousePos = new Vector3(mVal.x, mVal.y, 0f);
+                        hasMouse = true;
                     }
-                    return new Ray(headCameraTransform.position, headCameraTransform.forward);
                 }
-                return new Ray(headCameraTransform.position, headCameraTransform.forward);
+                catch { }
+
+                if (!hasMouse)
+                {
+                    try
+                    {
+                        mousePos = Input.mousePosition;
+                        hasMouse = true;
+                    }
+                    catch { }
+                }
+
+                if (hasMouse && mousePos.x >= 0 && mousePos.x <= Screen.width && mousePos.y >= 0 && mousePos.y <= Screen.height)
+                {
+                    return cam.ScreenPointToRay(mousePos);
+                }
+
+                return new Ray(cam.transform.position, cam.transform.forward);
             }
 
             return new Ray(Vector3.zero, Vector3.forward);
@@ -447,6 +482,20 @@ namespace OmniOS.Interaction
                 pressedButton = hoveredButton;
                 pressedButton.OnPointerDown();
                 TriggerHaptic(0.65f, 0.04f);
+            }
+            else if (IsTriggerDown && hoveredButton == null && !isTrackingVRController)
+            {
+                // Direct ScreenPointToRay fallback on desktop mouse click
+                Ray clickRay = GetCurrentPointerRay();
+                if (Physics.Raycast(clickRay, out RaycastHit directHit, maxRayDistance, interactionLayers))
+                {
+                    var directBtn = directHit.collider.GetComponentInParent<SpatialButton3D>();
+                    if (directBtn != null)
+                    {
+                        directBtn.TriggerClick();
+                        TriggerHaptic(0.65f, 0.04f);
+                    }
+                }
             }
 
             if (IsTriggerUp && pressedButton != null)

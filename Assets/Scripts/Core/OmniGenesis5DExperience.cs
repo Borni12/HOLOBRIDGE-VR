@@ -70,6 +70,7 @@ namespace OmniGenesis.Core
         private float avatarBreathTime = 0.0f;
         private float avatarBlinkTimer = 3.0f;
         private bool isAvatarBlinking = false;
+        public bool IsAvatarBlinking => isAvatarBlinking;
 
         // 5. Vestibular Shield State
         private VestibularShieldPass vestibularShield;
@@ -113,13 +114,26 @@ namespace OmniGenesis.Core
             BuildAll5DSystems();
         }
 
+        private void SafeDestroy(GameObject go)
+        {
+            if (go == null) return;
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+                DestroyImmediate(go);
+            else
+                Destroy(go);
+#else
+            Destroy(go);
+#endif
+        }
+
         public void RebuildAll5DSystems()
         {
-            if (realityPeelRoot != null) Destroy(realityPeelRoot);
-            if (matterWeaveRoot != null) Destroy(matterWeaveRoot);
-            if (multiverseOrbsRoot != null) Destroy(multiverseOrbsRoot);
-            if (avatarHandoffRoot != null) Destroy(avatarHandoffRoot);
-            if (gaussianSplatsRoot != null) Destroy(gaussianSplatsRoot);
+            if (realityPeelRoot != null) SafeDestroy(realityPeelRoot);
+            if (matterWeaveRoot != null) SafeDestroy(matterWeaveRoot);
+            if (multiverseOrbsRoot != null) SafeDestroy(multiverseOrbsRoot);
+            if (avatarHandoffRoot != null) SafeDestroy(avatarHandoffRoot);
+            if (gaussianSplatsRoot != null) SafeDestroy(gaussianSplatsRoot);
 
             Camera cam = OmniInputHelper.ResolveActiveCamera();
             if (cam != null) headCamera = cam.transform;

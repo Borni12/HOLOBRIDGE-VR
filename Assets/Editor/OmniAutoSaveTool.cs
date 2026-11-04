@@ -126,7 +126,7 @@ namespace OmniOS.EditorTools
             var bootSeq = EnsureComponent<OmniOSBootSequence>(osRoot);
 
             // 4. Find XR RightHand Controller in Scene Hierarchy
-            var allTransforms = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsSortMode.None);
+            var allTransforms = UnityEngine.Object.FindObjectsByType<Transform>();
             Transform rightHand = null;
             foreach (var t in allTransforms)
             {
@@ -173,17 +173,20 @@ namespace OmniOS.EditorTools
             }
 
             // 6. Disable legacy duplicate spawners
-            var legacySpawners = UnityEngine.Object.FindObjectsByType<VRMarkerSpawner>(FindObjectsSortMode.None);
+            var legacySpawners = UnityEngine.Object.FindObjectsByType<VRMarkerSpawner>();
             foreach (var spawner in legacySpawners)
             {
                 spawner.enabled = false;
                 EditorUtility.SetDirty(spawner);
             }
 
-            // 7. Auto-Save Scene
-            EditorUtility.SetDirty(osRoot);
-            EditorSceneManager.MarkSceneDirty(activeScene);
-            EditorSceneManager.SaveScene(activeScene);
+            // 7. Auto-Save Scene (only when not in play mode)
+            if (!EditorApplication.isPlaying)
+            {
+                EditorUtility.SetDirty(osRoot);
+                EditorSceneManager.MarkSceneDirty(activeScene);
+                EditorSceneManager.SaveScene(activeScene);
+            }
 
             lastSaveTimestamp = DateTime.Now;
             lastSaveMessage = $"Full Reload Completed & Auto-Saved at {lastSaveTimestamp:HH:mm:ss}";

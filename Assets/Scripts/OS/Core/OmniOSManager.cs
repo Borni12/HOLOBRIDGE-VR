@@ -208,9 +208,9 @@ namespace OmniOS.Core
             if (headFwd.sqrMagnitude < 0.01f) headFwd = Vector3.forward;
             headFwd.Normalize();
 
-            // 1. YouTube & Facebook Media Hub (Direct Center)
+            // 1. Android 15 Virtual Tablet & Internet Portal (Direct Center)
             Vector3 mediaPos = headPos + headFwd * 1.75f + Vector3.up * 0.06f;
-            var mediaWin = CreateWindow("media_hub", "Media Hub (YouTube, Facebook & Apps)", mediaPos, Quaternion.LookRotation(headFwd));
+            var mediaWin = CreateWindow("media_hub", "Android 15 Virtual Tablet (Vanilla Ice Cream • 5G)", mediaPos, Quaternion.LookRotation(headFwd));
             mediaWin.gameObject.AddComponent<OmniAppMediaHub>();
             mediaWin.Restore(); // Flagship app opens prominently on boot!
 

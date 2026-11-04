@@ -81,8 +81,9 @@ namespace OmniOS.Interaction
 
             textMesh = textObj.AddComponent<TextMesh>();
             textMesh.text = buttonText;
-            textMesh.fontSize = 36;
-            textMesh.characterSize = 0.0035f;
+            textMesh.fontSize = 64;
+            textMesh.characterSize = 0.0019f;
+            textMesh.fontStyle = FontStyle.Bold;
             textMesh.alignment = TextAlignment.Center;
             textMesh.anchor = TextAnchor.MiddleCenter;
             textMesh.color = textColor;

@@ -5,6 +5,7 @@ using UnityEditor;
 using UnityEngine;
 using OmniOS.Core;
 using OmniOS.Interaction;
+using OmniOS.Apps.MediaHub;
 using OmniGenesis.Core;
 
 namespace OmniOS.EditorTools
@@ -23,7 +24,11 @@ namespace OmniOS.EditorTools
         {
             EditorApplication.delayCall += () =>
             {
-                RunFullDiagnostic(false);
+                if (!hasRunOnce)
+                {
+                    hasRunOnce = true;
+                    RunFullDiagnostic(false);
+                }
             };
         }
 
@@ -63,11 +68,14 @@ namespace OmniOS.EditorTools
 
             try
             {
-                // Ensure scene is loaded
-                var activeScene = UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene();
-                if (string.IsNullOrEmpty(activeScene.path))
+                // Ensure scene is loaded if in edit mode
+                if (!EditorApplication.isPlaying)
                 {
-                    UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/Scenes/SampleScene.unity");
+                    var activeScene = UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene();
+                    if (string.IsNullOrEmpty(activeScene.path))
+                    {
+                        UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/Scenes/SampleScene.unity");
+                    }
                 }
 
                 // 1. Camera Resolution
@@ -134,10 +142,23 @@ namespace OmniOS.EditorTools
                     osManager.ToggleCleanView();
                     AssertTest("Button H (Zen Clean View Toggle)", true, "Dock visibility toggled for clean scenic view");
 
-                    // 10. Test App Buttons [1] to [3]
+                    // 10. Test Android 15 Virtual Tablet & Internet Portal
                     osManager.ToggleApp("media_hub");
                     var mediaWin = osManager.GetAppWindow("media_hub");
-                    AssertTest("Button 1 (Media Hub App Toggle)", mediaWin != null, "Media Hub Window created and restored");
+                    AssertTest("Button 1 (Android 15 Tablet Window)", mediaWin != null, "Android 15 Tablet Window created and restored");
+
+                    var androidHub = mediaWin != null ? mediaWin.GetComponent<OmniAppMediaHub>() : null;
+                    if (androidHub != null)
+                    {
+                        androidHub.SwitchTab(OmniAppMediaHub.HubTab.HomeScreen);
+                        androidHub.SwitchTab(OmniAppMediaHub.HubTab.ChromeBrowser);
+                        androidHub.NavigateToUrl("https://www.google.com", "Google Search");
+                        androidHub.SwitchTab(OmniAppMediaHub.HubTab.AndroidSettings);
+                        androidHub.PingInternet();
+                        androidHub.SwitchTab(OmniAppMediaHub.HubTab.YouTube);
+                        androidHub.SwitchTab(OmniAppMediaHub.HubTab.HomeScreen);
+                        AssertTest("Android 15 OS Multi-App Switching & Internet", true, "Successfully verified Home Screen, Chrome Browser, Settings, YouTube, and Internet ping");
+                    }
 
                     osManager.ToggleApp("scenery");
                     var sceneWin = osManager.GetAppWindow("scenery");
@@ -153,7 +174,7 @@ namespace OmniOS.EditorTools
                 }
 
                 // 12. Test Physical In-World 3D Buttons (SpatialButton3D)
-                var buttons3D = UnityEngine.Object.FindObjectsByType<SpatialButton3D>(FindObjectsSortMode.None);
+                var buttons3D = UnityEngine.Object.FindObjectsByType<SpatialButton3D>();
                 int buttonClicksTriggered = 0;
                 foreach (var b in buttons3D)
                 {

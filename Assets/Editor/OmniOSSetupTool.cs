@@ -104,7 +104,7 @@ namespace OmniOS.EditorTools
             }
 
             // Find RightHand Controller in XR Origin hierarchy
-            var allTransforms = Object.FindObjectsByType<Transform>(FindObjectsSortMode.None);
+            var allTransforms = Object.FindObjectsByType<Transform>();
             Transform rightHand = null;
             foreach (var t in allTransforms)
             {
@@ -154,7 +154,7 @@ namespace OmniOS.EditorTools
             }
 
             // Disable legacy VRMarkerSpawner to prevent input collisions
-            var legacySpawners = Object.FindObjectsByType<VRMarkerSpawner>(FindObjectsSortMode.None);
+            var legacySpawners = Object.FindObjectsByType<VRMarkerSpawner>();
             foreach (var spawner in legacySpawners)
             {
                 spawner.enabled = false;
