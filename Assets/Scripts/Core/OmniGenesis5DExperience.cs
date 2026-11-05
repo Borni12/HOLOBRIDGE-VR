@@ -127,6 +127,46 @@ namespace OmniGenesis.Core
 #endif
         }
 
+        public static Material CreateURPMaterial(Color color, Texture2D tex = null, bool transparent = false)
+        {
+            Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
+                         ?? Shader.Find("Sprites/Default")
+                         ?? Shader.Find("Unlit/Texture")
+                         ?? Shader.Find("Unlit/Color");
+
+            Material mat = new Material(shader);
+            mat.color = color;
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
+            if (mat.HasProperty("_Color")) mat.SetColor("_Color", color);
+
+            if (tex != null)
+            {
+                mat.mainTexture = tex;
+                if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", tex);
+                if (mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", tex);
+            }
+
+            if (transparent)
+            {
+                if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f);
+                if (mat.HasProperty("_Blend")) mat.SetFloat("_Blend", 0f);
+                mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                mat.SetInt("_ZWrite", 0);
+                mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            }
+
+            return mat;
+        }
+
+        public static void SetMaterialColor(Material mat, Color color)
+        {
+            if (mat == null) return;
+            mat.color = color;
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
+            if (mat.HasProperty("_Color")) mat.SetColor("_Color", color);
+        }
+
         public void RebuildAll5DSystems()
         {
             if (realityPeelRoot != null) SafeDestroy(realityPeelRoot);
@@ -190,26 +230,20 @@ namespace OmniGenesis.Core
             initialPortalPos = portalTransform.position;
             initialPortalScale = portalTransform.localScale;
 
-            Shader portalShader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Texture");
-            if (portalShader == null) portalShader = Shader.Find("Sprites/Default");
-            portalMaterial = new Material(portalShader);
-            portalMaterial.color = new Color(0.1f, 0.75f, 1.0f, 0.95f);
-            portalMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
-
-            // Create procedural preview texture
+            // Create procedural cosmic portal texture
             Texture2D tex = GenerateNeuralPreviewTexture();
-            portalMaterial.mainTexture = tex;
+            portalMaterial = CreateURPMaterial(Color.white, tex, false);
+            portalMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
             portalQuad.GetComponent<Renderer>().material = portalMaterial;
 
-            // Frame Borders (Gilded Cyber Rim)
+            // Frame Borders (Gilded Cyber Rim with Luminous Cyan/Gold Finish)
             GameObject frame = GameObject.CreatePrimitive(PrimitiveType.Cube);
             frame.name = "Portal_GildedRim";
             frame.transform.SetParent(realityPeelRoot.transform, false);
             frame.transform.localScale = new Vector3(1.22f, 0.82f, 0.03f);
             frame.transform.localPosition = new Vector3(0, 0, 0.015f);
             Destroy(frame.GetComponent<Collider>());
-            var rimMat = new Material(portalShader);
-            rimMat.color = new Color(0.0f, 0.95f, 1.0f, 0.85f);
+            var rimMat = CreateURPMaterial(new Color(0.0f, 0.95f, 1.0f, 0.95f));
             frame.GetComponent<Renderer>().material = rimMat;
 
             // 3D Control Buttons below frame
@@ -224,18 +258,34 @@ namespace OmniGenesis.Core
         private Texture2D GenerateNeuralPreviewTexture()
         {
             Texture2D tex = new Texture2D(256, 256, TextureFormat.RGBA32, false);
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.filterMode = FilterMode.Bilinear;
+
+            Color[] pixels = new Color[256 * 256];
             for (int y = 0; y < 256; y++)
             {
                 for (int x = 0; x < 256; x++)
                 {
-                    float u = x / 256f;
-                    float v = y / 256f;
-                    float c = Mathf.Sin(u * 12f) * Mathf.Cos(v * 12f) * 0.5f + 0.5f;
-                    Color col = Color.Lerp(new Color(0.05f, 0.15f, 0.35f), new Color(0.0f, 0.9f, 1.0f), c);
-                    tex.SetPixel(x, y, col);
+                    float u = (x - 128f) / 128f;
+                    float v = (y - 128f) / 128f;
+                    float dist = Mathf.Sqrt(u * u + v * v);
+
+                    float swirl = Mathf.Sin(dist * 14f - Mathf.Atan2(v, u) * 4f);
+                    Color deepSpace = new Color(0.02f, 0.04f, 0.10f, 1.0f);
+                    Color cyanGlow = new Color(0.0f, 0.88f, 1.0f, 1.0f);
+                    Color purpleNebula = new Color(0.70f, 0.15f, 0.95f, 1.0f);
+
+                    Color c = Color.Lerp(deepSpace, cyanGlow, Mathf.Clamp01(swirl * 0.5f + 0.5f));
+                    if (dist < 0.85f) c = Color.Lerp(c, purpleNebula, Mathf.Clamp01((0.85f - dist) * 1.2f));
+
+                    // Outer border ring
+                    if (dist > 0.92f && dist <= 1.0f) c = Color.Lerp(c, cyanGlow, 0.9f);
+
+                    pixels[y * 256 + x] = c;
                 }
             }
-            tex.Apply();
+            tex.SetPixels(pixels);
+            tex.Apply(false, false);
             return tex;
         }
 
@@ -394,9 +444,7 @@ namespace OmniGenesis.Core
             pedestal.transform.localPosition = new Vector3(0, -0.45f, 0);
             Destroy(pedestal.GetComponent<Collider>());
 
-            Shader unlit = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default");
-            var pedMat = new Material(unlit);
-            pedMat.color = new Color(0.06f, 0.12f, 0.22f, 0.95f);
+            var pedMat = CreateURPMaterial(new Color(0.06f, 0.12f, 0.22f, 0.95f));
             pedestal.GetComponent<Renderer>().material = pedMat;
 
             // Interactive Morphing Matter-Weave Object
@@ -409,7 +457,7 @@ namespace OmniGenesis.Core
             matterObjectTransform = matterObj.transform;
             matterOriginalScale = matterObjectTransform.localScale;
 
-            matterMaterial = new Material(unlit);
+            matterMaterial = CreateURPMaterial(new Color(0.25f, 1.0f, 0.55f, 0.90f));
             matterObj.GetComponent<Renderer>().material = matterMaterial;
 
             matterRb = matterObj.AddComponent<Rigidbody>();
@@ -445,13 +493,13 @@ namespace OmniGenesis.Core
             switch (currentStiffness)
             {
                 case MaterialStiffness.Rigid:
-                    matterMaterial.color = new Color(0.92f, 0.94f, 1.0f, 0.95f);
+                    SetMaterialColor(matterMaterial, new Color(0.92f, 0.94f, 1.0f, 0.95f));
                     break;
                 case MaterialStiffness.Elastic:
-                    matterMaterial.color = new Color(0.25f, 1.0f, 0.55f, 0.90f);
+                    SetMaterialColor(matterMaterial, new Color(0.25f, 1.0f, 0.55f, 0.90f));
                     break;
                 case MaterialStiffness.Fluid:
-                    matterMaterial.color = new Color(0.0f, 0.72f, 1.0f, 0.75f);
+                    SetMaterialColor(matterMaterial, new Color(0.0f, 0.72f, 1.0f, 0.75f));
                     break;
             }
         }
@@ -505,8 +553,7 @@ namespace OmniGenesis.Core
                 orb.transform.localScale = Vector3.one * 0.16f;
                 orb.transform.localPosition = localPos;
 
-                var orbMat = new Material(unlit);
-                orbMat.color = timelineColors[i];
+                var orbMat = CreateURPMaterial(timelineColors[i]);
                 orb.GetComponent<Renderer>().material = orbMat;
 
                 // Rotating Energy Ring
@@ -516,8 +563,7 @@ namespace OmniGenesis.Core
                 ring.transform.localScale = new Vector3(1.35f, 0.012f, 1.35f);
                 ring.transform.localRotation = Quaternion.Euler(35f, 0, 0);
                 Destroy(ring.GetComponent<Collider>());
-                var ringMat = new Material(unlit);
-                ringMat.color = timelineColors[i] * 1.3f;
+                var ringMat = CreateURPMaterial(timelineColors[i] * 1.35f);
                 ring.GetComponent<Renderer>().material = ringMat;
 
                 orbRings[i] = ring.transform;
@@ -571,38 +617,35 @@ namespace OmniGenesis.Core
 
             Shader unlit = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default");
 
-            // 1. Torso / Body
+            // 1. Torso / Body (Dark Cybernetic Suit)
             GameObject torso = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             torso.name = "Sophia_Torso";
             torso.transform.SetParent(avatarHandoffRoot.transform, false);
             torso.transform.localScale = new Vector3(0.38f, 0.65f, 0.25f);
             torso.transform.localPosition = new Vector3(0, 0.75f, 0);
             Destroy(torso.GetComponent<Collider>());
-            var bodyMat = new Material(unlit);
-            bodyMat.color = new Color(0.12f, 0.16f, 0.26f);
+            var bodyMat = CreateURPMaterial(new Color(0.08f, 0.12f, 0.20f, 1f));
             torso.GetComponent<Renderer>().material = bodyMat;
 
-            // 2. Head
+            // 2. Head (Realistic Warm Skin Tone)
             GameObject head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             head.name = "Sophia_Head";
             head.transform.SetParent(avatarHandoffRoot.transform, false);
             head.transform.localScale = new Vector3(0.24f, 0.28f, 0.24f);
             head.transform.localPosition = new Vector3(0, 1.52f, 0);
             Destroy(head.GetComponent<Collider>());
-            var headMat = new Material(unlit);
-            headMat.color = new Color(0.95f, 0.78f, 0.68f); // Skin tone
+            var headMat = CreateURPMaterial(new Color(0.95f, 0.78f, 0.68f, 1f));
             head.GetComponent<Renderer>().material = headMat;
             avatarHeadTransform = head.transform;
 
-            // 3. Eyes / Visor
+            // 3. Eyes / Visor (Luminous Neon Cyan)
             GameObject visor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             visor.name = "Sophia_Visor";
             visor.transform.SetParent(head.transform, false);
             visor.transform.localScale = new Vector3(0.65f, 0.18f, 0.35f);
             visor.transform.localPosition = new Vector3(0, 0.12f, 0.45f);
             Destroy(visor.GetComponent<Collider>());
-            var visorMat = new Material(unlit);
-            visorMat.color = new Color(0.0f, 0.95f, 1.0f, 0.95f);
+            var visorMat = CreateURPMaterial(new Color(0.0f, 0.95f, 1.0f, 0.95f));
             visor.GetComponent<Renderer>().material = visorMat;
 
             // 4. Right Arm (IK Reach target)
@@ -633,8 +676,7 @@ namespace OmniGenesis.Core
             exchangeObject.transform.localScale = Vector3.one * 0.12f;
             exchangeObject.transform.localPosition = new Vector3(-0.28f, 0.72f, 0.38f);
             Destroy(exchangeObject.GetComponent<Collider>());
-            var relicMat = new Material(unlit);
-            relicMat.color = new Color(1.0f, 0.75f, 0.15f);
+            var relicMat = CreateURPMaterial(new Color(1.0f, 0.75f, 0.15f, 1f));
             exchangeObject.GetComponent<Renderer>().material = relicMat;
 
             // 3D Handoff Action Button
@@ -679,8 +721,7 @@ namespace OmniGenesis.Core
             shape.radius = 4.5f;
 
             var renderer = gaussianParticles.GetComponent<ParticleSystemRenderer>();
-            Shader partShader = Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? Shader.Find("Sprites/Default");
-            renderer.material = new Material(partShader);
+            renderer.material = CreateURPMaterial(new Color(0.0f, 0.85f, 1.0f, 0.65f), null, true);
         }
         #endregion
 
@@ -727,7 +768,8 @@ namespace OmniGenesis.Core
 
                 if (portalMaterial != null)
                 {
-                    portalMaterial.color = Color.Lerp(new Color(0.1f, 0.75f, 1.0f, 0.95f), new Color(0.0f, 0.95f, 1.0f, 0.35f), peelProgress);
+                    Color peelCol = Color.Lerp(new Color(0.1f, 0.75f, 1.0f, 0.95f), new Color(0.0f, 0.95f, 1.0f, 0.35f), peelProgress);
+                    SetMaterialColor(portalMaterial, peelCol);
                 }
             }
             else

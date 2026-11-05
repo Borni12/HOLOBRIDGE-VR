@@ -68,9 +68,22 @@ namespace OmniOS.Interaction
         private float cameraPitch = 0f;
         private float cameraYaw = 0f;
         private bool isTrackingVRController = false;
+        private float lastMouseActivityTime = 1f;
+        private float lastVRActivityTime = -10f;
+        private bool isUsingVR = false;
+
+        private static SpatialPointer instance;
+        public static SpatialPointer Instance => instance;
 
         private void Awake()
         {
+            if (instance != null && instance != this)
+            {
+                Destroy(this);
+                return;
+            }
+            instance = this;
+
             if (headCameraTransform == null)
             {
                 var cam = OmniGenesis.Core.OmniInputHelper.ResolveActiveCamera();
@@ -100,6 +113,13 @@ namespace OmniOS.Interaction
             }
 
             SetupVisuals();
+        }
+
+        private void Start()
+        {
+            // Guarantee visible and unlocked system cursor on standalone .exe / desktop launch
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
         }
 
         private void SetupVisuals()
@@ -270,8 +290,35 @@ namespace OmniOS.Interaction
                 }
             } catch { }
 
+            // Track user interaction modality: Mouse vs VR Controller
+            bool mouseMovedOrUsed = mouseLeft || mouseRight;
+            try
+            {
+                var mouse = UnityEngine.InputSystem.Mouse.current;
+                if (mouse != null && mouse.delta.ReadValue().sqrMagnitude > 0.04f)
+                {
+                    mouseMovedOrUsed = true;
+                }
+            } catch { }
+
+            if (!mouseMovedOrUsed)
+            {
+                try
+                {
+                    if (Mathf.Abs(Input.GetAxis("Mouse X")) > 0.01f || Mathf.Abs(Input.GetAxis("Mouse Y")) > 0.01f)
+                    {
+                        mouseMovedOrUsed = true;
+                    }
+                } catch { }
+            }
+
+            if (mouseMovedOrUsed) lastMouseActivityTime = Time.unscaledTime;
+            if (vrTrigger || vrGrip) lastVRActivityTime = Time.unscaledTime;
+
+            isUsingVR = isTrackingVRController && (lastVRActivityTime >= lastMouseActivityTime);
+
             // If the 2D Apps Launcher Box is open on screen, block mouse clicks from piercing into 3D world behind it
-            if (OmniAppLauncherBox.IsOpen && !isTrackingVRController)
+            if (OmniAppLauncherBox.IsOpen && !isUsingVR)
             {
                 mouseLeft = false;
             }
@@ -286,8 +333,8 @@ namespace OmniOS.Interaction
 
         public Ray GetCurrentPointerRay()
         {
-            // 1. If VR Controller is physically tracked (Quest 3, Quest Pro, OpenXR)
-            if (isTrackingVRController && rightHandTransform != null)
+            // 1. If actively holding VR Controller (Quest 3, Quest Pro, OpenXR)
+            if (isUsingVR && rightHandTransform != null)
             {
                 return new Ray(rightHandTransform.position, rightHandTransform.forward);
             }
@@ -295,31 +342,37 @@ namespace OmniOS.Interaction
             // 2. Desktop Mouse Raycast (Windows, Mac, Linux, AR Touch)
             Camera cam = null;
             if (headCameraTransform != null) cam = headCameraTransform.GetComponent<Camera>();
-            if (cam == null) cam = Camera.main ?? OmniGenesis.Core.OmniInputHelper.ResolveActiveCamera() ?? UnityEngine.Object.FindAnyObjectByType<Camera>();
+            if (cam == null || cam.targetTexture != null) cam = Camera.main;
+            if (cam == null || cam.targetTexture != null) cam = OmniGenesis.Core.OmniInputHelper.ResolveActiveCamera();
 
             if (cam != null)
             {
                 Vector3 mousePos = Vector3.zero;
                 bool hasMouse = false;
 
+                // Priority 1: Legacy Input mousePosition (always exact screen pixel coordinates on PC/Mac/Linux)
                 try
                 {
-                    var mouse = UnityEngine.InputSystem.Mouse.current;
-                    if (mouse != null)
+                    mousePos = Input.mousePosition;
+                    if (mousePos.x >= 0 && mousePos.x <= Screen.width && mousePos.y >= 0 && mousePos.y <= Screen.height)
                     {
-                        Vector2 mVal = mouse.position.ReadValue();
-                        mousePos = new Vector3(mVal.x, mVal.y, 0f);
                         hasMouse = true;
                     }
                 }
                 catch { }
 
+                // Priority 2: New Input System Mouse.current
                 if (!hasMouse)
                 {
                     try
                     {
-                        mousePos = Input.mousePosition;
-                        hasMouse = true;
+                        var mouse = UnityEngine.InputSystem.Mouse.current;
+                        if (mouse != null)
+                        {
+                            Vector2 mVal = mouse.position.ReadValue();
+                            mousePos = new Vector3(mVal.x, mVal.y, 0f);
+                            hasMouse = true;
+                        }
                     }
                     catch { }
                 }
@@ -337,21 +390,14 @@ namespace OmniOS.Interaction
 
         private Vector3 GetBeamOrigin()
         {
-            if (isTrackingVRController && rightHandTransform != null)
+            if (isUsingVR && rightHandTransform != null)
             {
                 return rightHandTransform.position;
             }
 
-            if (headCameraTransform != null)
-            {
-                // Futuristic handheld stylist emitter offset relative to head camera
-                return headCameraTransform.position +
-                       headCameraTransform.right * 0.22f +
-                       headCameraTransform.up * -0.18f +
-                       headCameraTransform.forward * 0.32f;
-            }
-
-            return Vector3.zero;
+            // In desktop mode, originate ray from camera eye so reticle matches mouse perfectly
+            Ray r = GetCurrentPointerRay();
+            return r.origin;
         }
 
         private void UpdateRaycast()
@@ -429,9 +475,16 @@ namespace OmniOS.Interaction
                 cursorDot.gameObject.SetActive(false);
             }
 
-            // Update Laser Beam Line
-            lineRenderer.SetPosition(0, origin);
-            lineRenderer.SetPosition(1, target);
+            // Laser beam: Active for VR controller, discreet reticle for desktop mouse
+            if (lineRenderer != null)
+            {
+                lineRenderer.enabled = isUsingVR;
+                if (isUsingVR)
+                {
+                    lineRenderer.SetPosition(0, origin);
+                    lineRenderer.SetPosition(1, target);
+                }
+            }
         }
 
         private void HandleInteractiveElements()
@@ -483,7 +536,7 @@ namespace OmniOS.Interaction
                 pressedButton.OnPointerDown();
                 TriggerHaptic(0.65f, 0.04f);
             }
-            else if (IsTriggerDown && hoveredButton == null && !isTrackingVRController)
+            else if (IsTriggerDown && hoveredButton == null && !isUsingVR)
             {
                 // Direct ScreenPointToRay fallback on desktop mouse click
                 Ray clickRay = GetCurrentPointerRay();
@@ -494,6 +547,16 @@ namespace OmniOS.Interaction
                     {
                         directBtn.TriggerClick();
                         TriggerHaptic(0.65f, 0.04f);
+                    }
+                    else if (directHit.collider.name.Contains("Camera_Viewfinder") || directHit.collider.name.Contains("CameraApp_LiveScreen"))
+                    {
+                        // Direct click/tap on camera screen flips front/rear camera feeds
+                        var mediaApp = directHit.collider.GetComponentInParent<OmniOS.Apps.MediaHub.OmniAppMediaHub>();
+                        if (mediaApp != null)
+                        {
+                            mediaApp.SwitchCameraFeed();
+                            TriggerHaptic(0.5f, 0.03f);
+                        }
                     }
                 }
             }

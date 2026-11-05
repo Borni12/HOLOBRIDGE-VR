@@ -80,16 +80,66 @@ namespace OmniGenesis.Core
         }
 
         /// <summary>
-        /// Universally finds, activates, and auto-tags the main camera in the scene.
-        /// Resolves XR Origin camera conflicts and prevents TrackedPoseDriver from blocking desktop mouse look.
+        /// Universally finds, activates, and auto-tags the main eye camera in the scene.
+        /// Resolves XR Origin camera conflicts, strictly excludes secondary RenderTexture cameras
+        /// (such as tablet optical lenses or spatial camera viewfinders), and ensures smooth mouse look and desktop navigation.
         /// </summary>
         public static Camera ResolveActiveCamera()
         {
             Camera cam = Camera.main;
 
+            // If Camera.main is null or has targetTexture (i.e. is an offscreen / RenderTexture camera like tablet lens), untag it!
+            if (cam != null && (cam.targetTexture != null || cam.name.Contains("Lens") || cam.name.Contains("Tablet") || cam.name.Contains("Capture") || cam.name.Contains("SpatialCamera")))
+            {
+                cam.gameObject.tag = "Untagged";
+                cam = null;
+            }
+
             if (cam == null)
             {
-                cam = UnityEngine.Object.FindAnyObjectByType<Camera>();
+                // Search for active cameras in the scene that render directly to the screen display (targetTexture == null)
+                Camera[] allCams = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
+
+                // Priority 1: Direct display camera tagged "MainCamera"
+                foreach (var c in allCams)
+                {
+                    if (c != null && c.gameObject.activeInHierarchy && c.targetTexture == null && c.CompareTag("MainCamera"))
+                    {
+                        cam = c;
+                        break;
+                    }
+                }
+
+                // Priority 2: Direct display camera whose name implies eye/player/XR/main
+                if (cam == null)
+                {
+                    foreach (var c in allCams)
+                    {
+                        if (c != null && c.gameObject.activeInHierarchy && c.targetTexture == null)
+                        {
+                            string n = c.name.ToLower();
+                            if (n.Contains("main") || n.Contains("head") || n.Contains("eye") || n.Contains("player") || n.Contains("xr"))
+                            {
+                                cam = c;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Priority 3: ANY active camera whose targetTexture == null
+                if (cam == null)
+                {
+                    foreach (var c in allCams)
+                    {
+                        if (c != null && c.gameObject.activeInHierarchy && c.targetTexture == null)
+                        {
+                            cam = c;
+                            break;
+                        }
+                    }
+                }
+
                 if (cam != null)
                 {
                     cam.gameObject.tag = "MainCamera";

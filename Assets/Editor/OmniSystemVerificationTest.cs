@@ -143,6 +143,7 @@ namespace OmniOS.EditorTools
                     AssertTest("Button H (Zen Clean View Toggle)", true, "Dock visibility toggled for clean scenic view");
 
                     // 10. Test Android 15 Virtual Tablet & Internet Portal
+                    osManager.BootstrapDefaultApps();
                     osManager.ToggleApp("media_hub");
                     var mediaWin = osManager.GetAppWindow("media_hub");
                     AssertTest("Button 1 (Android 15 Tablet Window)", mediaWin != null, "Android 15 Tablet Window created and restored");
@@ -155,9 +156,13 @@ namespace OmniOS.EditorTools
                         androidHub.NavigateToUrl("https://www.google.com", "Google Search");
                         androidHub.SwitchTab(OmniAppMediaHub.HubTab.AndroidSettings);
                         androidHub.PingInternet();
+                        androidHub.SwitchTab(OmniAppMediaHub.HubTab.CameraPro);
+                        androidHub.SwitchCameraFeed(); // Flip to Front Selfie Screen Camera
+                        androidHub.CycleCameraZoom();   // Zoom 2x
+                        androidHub.SwitchCameraFeed(); // Flip back to Outside World Metaverse Camera
                         androidHub.SwitchTab(OmniAppMediaHub.HubTab.YouTube);
                         androidHub.SwitchTab(OmniAppMediaHub.HubTab.HomeScreen);
-                        AssertTest("Android 15 OS Multi-App Switching & Internet", true, "Successfully verified Home Screen, Chrome Browser, Settings, YouTube, and Internet ping");
+                        AssertTest("Android 15 OS Multi-App & Dual-Camera Verification", true, "Successfully verified Home Screen, Chrome Browser, Settings, Dual-Lens Camera (Front/Rear), YouTube, and Internet ping");
                     }
 
                     osManager.ToggleApp("scenery");

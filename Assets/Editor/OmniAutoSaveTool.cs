@@ -102,8 +102,24 @@ namespace OmniOS.EditorTools
                 }
             }
 
-            // 2. Find or Create [OMNIOS_CORE] Master Root
-            GameObject osRoot = GameObject.Find("[OMNIOS_CORE]");
+            // 2. Clean up any duplicate [OMNIOS_CORE] Master Roots in Scene Asset
+            GameObject[] allSceneObjects = UnityEngine.Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+            GameObject osRoot = null;
+            foreach (var go in allSceneObjects)
+            {
+                if (go != null && go.name == "[OMNIOS_CORE]")
+                {
+                    if (osRoot == null)
+                    {
+                        osRoot = go;
+                    }
+                    else
+                    {
+                        Undo.DestroyObjectImmediate(go);
+                    }
+                }
+            }
+
             if (osRoot == null)
             {
                 osRoot = new GameObject("[OMNIOS_CORE]");
@@ -111,6 +127,11 @@ namespace OmniOS.EditorTools
             }
             osRoot.transform.position = Vector3.zero;
             osRoot.transform.rotation = Quaternion.identity;
+
+            // Eliminate washed-out dull gray scene fog
+            RenderSettings.fog = false;
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.18f, 0.22f, 0.32f, 1f);
 
             // 3. Attach and Configure All 11 Core Components
             var osManager = EnsureComponent<OmniOSManager>(osRoot);

@@ -77,12 +77,14 @@ namespace OmniOS.Apps.CameraApp
             if (captureCamera == null)
             {
                 GameObject camObj = new GameObject("SpatialCamera_Lens");
+                camObj.tag = "Untagged"; // Strictly Untagged: Never hijack MainCamera
                 camObj.transform.SetParent(transform, false);
                 camObj.transform.localPosition = new Vector3(0, 0, 0.12f);
                 camObj.transform.localRotation = Quaternion.identity;
 
                 captureCamera = camObj.AddComponent<Camera>();
                 captureCamera.clearFlags = CameraClearFlags.Skybox;
+                captureCamera.depth = -50; // Offscreen render buffer only
                 captureCamera.fieldOfView = fieldOfView;
                 captureCamera.nearClipPlane = 0.05f;
                 captureCamera.farClipPlane = 500f;

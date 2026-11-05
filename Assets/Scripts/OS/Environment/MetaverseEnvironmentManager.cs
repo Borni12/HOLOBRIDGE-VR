@@ -41,6 +41,11 @@ namespace OmniOS.Environment
 
         private void BuildMetaverseRoom()
         {
+            // Eliminate dull gray fog that washed out the scene and made visuals vague
+            RenderSettings.fog = false;
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.18f, 0.22f, 0.32f, 1f);
+
             environmentRoot = new GameObject("Metaverse_VirtualRoom_Root");
             environmentRoot.transform.SetParent(transform, false);
 
@@ -75,19 +80,20 @@ namespace OmniOS.Environment
                 Destroy(pillar.GetComponent<Collider>());
 
                 Material pillarMat = new Material(unlitShader);
-                pillarMat.color = new Color(0.0f, 0.85f, 1.0f, 0.65f);
+                pillarMat.color = new Color(0.0f, 0.85f, 1.0f, 0.85f);
+                if (pillarMat.HasProperty("_BaseColor")) pillarMat.SetColor("_BaseColor", new Color(0.0f, 0.85f, 1.0f, 0.85f));
                 pillar.GetComponent<Renderer>().material = pillarMat;
                 pillars[i] = pillar;
             }
 
-            // 3. Central Atmospheric Ambient Light
+            // 3. Central Atmospheric Ambient Light (Volumetric illumination)
             GameObject lightObj = new GameObject("Metaverse_AmbientLight");
             lightObj.transform.SetParent(environmentRoot.transform, false);
             lightObj.transform.localPosition = new Vector3(0, 4.5f, 0);
             centerAmbientLight = lightObj.AddComponent<Light>();
             centerAmbientLight.type = LightType.Point;
             centerAmbientLight.range = 35.0f;
-            centerAmbientLight.intensity = 1.6f;
+            centerAmbientLight.intensity = 2.2f;
             centerAmbientLight.color = new Color(0.0f, 0.82f, 1.0f);
 
             // 4. Ambient Floating Dust Motes
@@ -146,17 +152,24 @@ namespace OmniOS.Environment
 
             if (floorMaterial != null)
             {
-                floorMaterial.SetColor("_GridColor", gridColor);
+                if (floorMaterial.HasProperty("_GridColor")) floorMaterial.SetColor("_GridColor", gridColor);
+                if (floorMaterial.HasProperty("_BaseColor")) floorMaterial.SetColor("_BaseColor", new Color(0.02f, 0.04f, 0.08f, 1.0f));
             }
             if (centerAmbientLight != null)
             {
                 centerAmbientLight.color = lightColor;
+                centerAmbientLight.intensity = 2.2f;
             }
             for (int i = 0; i < pillars.Length; i++)
             {
                 if (pillars[i] != null)
                 {
-                    pillars[i].GetComponent<Renderer>().material.color = gridColor * 0.8f;
+                    var rend = pillars[i].GetComponent<Renderer>();
+                    if (rend != null && rend.material != null)
+                    {
+                        rend.material.color = gridColor * 0.9f;
+                        if (rend.material.HasProperty("_BaseColor")) rend.material.SetColor("_BaseColor", gridColor * 0.9f);
+                    }
                 }
             }
         }

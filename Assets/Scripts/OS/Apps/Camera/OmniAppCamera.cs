@@ -136,13 +136,22 @@ namespace OmniOS.Apps.CameraApp
         {
             if (screenMaterial == null) return;
 
+            Texture activeTex = null;
             if (useDeviceWebcam && deviceCamManager != null && deviceCamManager.IsStreaming)
             {
-                screenMaterial.SetTexture("_MainTex", deviceCamManager.LiveCameraTexture);
+                activeTex = deviceCamManager.LiveCameraTexture;
             }
             else if (cameraDevice != null && cameraDevice.ViewfinderTexture != null)
             {
-                screenMaterial.SetTexture("_MainTex", cameraDevice.ViewfinderTexture);
+                activeTex = cameraDevice.ViewfinderTexture;
+            }
+
+            if (activeTex != null)
+            {
+                screenMaterial.mainTexture = activeTex;
+                if (screenMaterial.HasProperty("_MainTex")) screenMaterial.SetTexture("_MainTex", activeTex);
+                if (screenMaterial.HasProperty("_BaseMap")) screenMaterial.SetTexture("_BaseMap", activeTex);
+                if (screenMaterial.HasProperty("_BaseColor")) screenMaterial.SetColor("_BaseColor", Color.white);
             }
         }
 

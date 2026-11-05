@@ -75,7 +75,7 @@ namespace OmniOS.Core
         {
             if (instance != null && instance != this)
             {
-                Destroy(this);
+                Destroy(gameObject);
                 return;
             }
             instance = this;
@@ -200,71 +200,140 @@ namespace OmniOS.Core
             }
         }
 
-        private void BootstrapDefaultApps()
+        public void BootstrapDefaultApps()
         {
+            if (windowsRoot == null)
+            {
+                var wr = GameObject.Find("OmniOS_Windows_Root");
+                if (wr != null) windowsRoot = wr.transform;
+                else
+                {
+                    GameObject rootObj = new GameObject("OmniOS_Windows_Root");
+                    windowsRoot = rootObj.transform;
+                }
+            }
+
             Vector3 headPos = userHead != null ? userHead.position : Vector3.up * 1.6f;
             Vector3 headFwd = userHead != null ? userHead.forward : Vector3.forward;
             headFwd.y = 0;
             if (headFwd.sqrMagnitude < 0.01f) headFwd = Vector3.forward;
             headFwd.Normalize();
 
+            // Populate from existing scene hierarchy if already created
+            var existingWindows = UnityEngine.Object.FindObjectsByType<SpatialWindow>();
+            foreach (var win in existingWindows)
+            {
+                if (win != null)
+                {
+                    string n = win.gameObject.name.ToLower();
+                    if (n.Contains("media_hub")) registeredApps["media_hub"] = win;
+                    else if (n.Contains("scenery")) registeredApps["scenery"] = win;
+                    else if (n.Contains("camera")) registeredApps["camera"] = win;
+                    else if (n.Contains("gallery")) registeredApps["gallery"] = win;
+                    else if (n.Contains("video_reality")) registeredApps["video_reality"] = win;
+                    else if (n.Contains("matter_weave")) registeredApps["matter_weave"] = win;
+                    else if (n.Contains("multiverse")) registeredApps["multiverse"] = win;
+                    else if (n.Contains("spatial_canvas")) registeredApps["spatial_canvas"] = win;
+                    else if (n.Contains("settings")) registeredApps["settings"] = win;
+                }
+            }
+
+            if (registeredApps.ContainsKey("media_hub") && registeredApps.ContainsKey("scenery") && registeredApps.ContainsKey("camera")) return;
+
             // 1. Android 15 Virtual Tablet & Internet Portal (Direct Center)
-            Vector3 mediaPos = headPos + headFwd * 1.75f + Vector3.up * 0.06f;
-            var mediaWin = CreateWindow("media_hub", "Android 15 Virtual Tablet (Vanilla Ice Cream • 5G)", mediaPos, Quaternion.LookRotation(headFwd));
-            mediaWin.gameObject.AddComponent<OmniAppMediaHub>();
-            mediaWin.Restore(); // Flagship app opens prominently on boot!
+            if (!registeredApps.ContainsKey("media_hub"))
+            {
+                Vector3 mediaPos = headPos + headFwd * 1.75f + Vector3.up * 0.06f;
+                var mediaWin = CreateWindow("media_hub", "Android 15 Virtual Tablet (Vanilla Ice Cream • 5G)", mediaPos, Quaternion.LookRotation(headFwd));
+                mediaWin.gameObject.AddComponent<OmniAppMediaHub>();
+                mediaWin.Restore(); // Flagship app opens prominently on boot!
+            }
 
             // 2. Scenery & Environment Explorer (Front Center Right)
-            Vector3 sceneryPos = headPos + (Quaternion.Euler(0, 22f, 0) * headFwd) * 1.8f + Vector3.up * 0.08f;
-            var sceneryWin = CreateWindow("scenery", "Metaverse Scenery Explorer", sceneryPos, Quaternion.LookRotation(Quaternion.Euler(0, 22f, 0) * headFwd));
-            sceneryWin.gameObject.AddComponent<OmniAppScenery>();
-            sceneryWin.Minimize();
+            if (!registeredApps.ContainsKey("scenery"))
+            {
+                Vector3 sceneryPos = headPos + (Quaternion.Euler(0, 22f, 0) * headFwd) * 1.8f + Vector3.up * 0.08f;
+                var sceneryWin = CreateWindow("scenery", "Metaverse Scenery Explorer", sceneryPos, Quaternion.LookRotation(Quaternion.Euler(0, 22f, 0) * headFwd));
+                sceneryWin.gameObject.AddComponent<OmniAppScenery>();
+                sceneryWin.Minimize();
+            }
 
             // 3. OmniCam App (Front Center Left)
-            Vector3 camPos = headPos + (Quaternion.Euler(0, -22f, 0) * headFwd) * 1.8f + Vector3.up * 0.08f;
-            var camWin = CreateWindow("camera", "OmniCam Pro (Spatial & Device Camera)", camPos, Quaternion.LookRotation(Quaternion.Euler(0, -22f, 0) * headFwd));
-            camWin.gameObject.AddComponent<OmniAppCamera>();
-            camWin.Minimize();
+            if (!registeredApps.ContainsKey("camera"))
+            {
+                Vector3 camPos = headPos + (Quaternion.Euler(0, -22f, 0) * headFwd) * 1.8f + Vector3.up * 0.08f;
+                var camWin = CreateWindow("camera", "OmniCam Pro (Spatial & Device Camera)", camPos, Quaternion.LookRotation(Quaternion.Euler(0, -22f, 0) * headFwd));
+                camWin.gameObject.AddComponent<OmniAppCamera>();
+                camWin.Minimize();
+            }
 
             // 4. Gallery App (Right)
-            Vector3 galleryPos = headPos + (Quaternion.Euler(0, 44f, 0) * headFwd) * 1.85f;
-            var galleryWin = CreateWindow("gallery", "Spatial Media Gallery", galleryPos, Quaternion.LookRotation(Quaternion.Euler(0, 44f, 0) * headFwd));
-            galleryWin.gameObject.AddComponent<OmniAppGallery>();
-            galleryWin.Minimize();
+            if (!registeredApps.ContainsKey("gallery"))
+            {
+                Vector3 galleryPos = headPos + (Quaternion.Euler(0, 44f, 0) * headFwd) * 1.85f;
+                var galleryWin = CreateWindow("gallery", "Spatial Media Gallery", galleryPos, Quaternion.LookRotation(Quaternion.Euler(0, 44f, 0) * headFwd));
+                galleryWin.gameObject.AddComponent<OmniAppGallery>();
+                galleryWin.Minimize();
+            }
 
             // 5. Video Reality Studio (Left)
-            Vector3 centerPos = headPos + (Quaternion.Euler(0, -44f, 0) * headFwd) * 1.85f;
-            var videoWin = CreateWindow("video_reality", "Video Reality Studio", centerPos, Quaternion.LookRotation(Quaternion.Euler(0, -44f, 0) * headFwd));
-            videoWin.gameObject.AddComponent<OmniAppVideoReality>();
-            videoWin.Minimize();
+            if (!registeredApps.ContainsKey("video_reality"))
+            {
+                Vector3 centerPos = headPos + (Quaternion.Euler(0, -44f, 0) * headFwd) * 1.85f;
+                var videoWin = CreateWindow("video_reality", "Video Reality Studio", centerPos, Quaternion.LookRotation(Quaternion.Euler(0, -44f, 0) * headFwd));
+                videoWin.gameObject.AddComponent<OmniAppVideoReality>();
+                videoWin.Minimize();
+            }
 
             // 6. Matter-Weave App (Far Left)
-            Vector3 leftPos = headPos + (Quaternion.Euler(0, -66f, 0) * headFwd) * 1.85f;
-            var matterWin = CreateWindow("matter_weave", "Matter-Weave Continuum Lab", leftPos, Quaternion.LookRotation(Quaternion.Euler(0, -66f, 0) * headFwd));
-            matterWin.gameObject.AddComponent<OmniAppMatterWeave>();
-            matterWin.Minimize();
+            if (!registeredApps.ContainsKey("matter_weave"))
+            {
+                Vector3 leftPos = headPos + (Quaternion.Euler(0, -66f, 0) * headFwd) * 1.85f;
+                var matterWin = CreateWindow("matter_weave", "Matter-Weave Continuum Lab", leftPos, Quaternion.LookRotation(Quaternion.Euler(0, -66f, 0) * headFwd));
+                matterWin.gameObject.AddComponent<OmniAppMatterWeave>();
+                matterWin.Minimize();
+            }
 
             // 7. Multiverse App (Far Right)
-            Vector3 rightPos = headPos + (Quaternion.Euler(0, 66f, 0) * headFwd) * 1.85f;
-            var multiWin = CreateWindow("multiverse", "Multiverse Chronos", rightPos, Quaternion.LookRotation(Quaternion.Euler(0, 66f, 0) * headFwd));
-            multiWin.gameObject.AddComponent<OmniAppMultiverse>();
-            multiWin.Minimize();
+            if (!registeredApps.ContainsKey("multiverse"))
+            {
+                Vector3 rightPos = headPos + (Quaternion.Euler(0, 66f, 0) * headFwd) * 1.85f;
+                var multiWin = CreateWindow("multiverse", "Multiverse Chronos", rightPos, Quaternion.LookRotation(Quaternion.Euler(0, 66f, 0) * headFwd));
+                multiWin.gameObject.AddComponent<OmniAppMultiverse>();
+                multiWin.Minimize();
+            }
 
             // 8. Spatial Canvas App (Bottom Left)
-            Vector3 canvasPos = headPos + (Quaternion.Euler(0, -82f, 0) * headFwd) * 1.65f + Vector3.down * 0.2f;
-            var canvasWin = CreateWindow("spatial_canvas", "Spatial Canvas", canvasPos, Quaternion.LookRotation(Quaternion.Euler(0, -82f, 0) * headFwd));
-            canvasWin.gameObject.AddComponent<OmniAppSpatialCanvas>();
-            canvasWin.Minimize();
+            if (!registeredApps.ContainsKey("spatial_canvas"))
+            {
+                Vector3 canvasPos = headPos + (Quaternion.Euler(0, -82f, 0) * headFwd) * 1.65f + Vector3.down * 0.2f;
+                var canvasWin = CreateWindow("spatial_canvas", "Spatial Canvas", canvasPos, Quaternion.LookRotation(Quaternion.Euler(0, -82f, 0) * headFwd));
+                canvasWin.gameObject.AddComponent<OmniAppSpatialCanvas>();
+                canvasWin.Minimize();
+            }
 
             // 9. System Settings App (Bottom Right)
-            Vector3 settingsPos = headPos + (Quaternion.Euler(0, 82f, 0) * headFwd) * 1.65f + Vector3.down * 0.2f;
-            var settingsWin = CreateWindow("settings", "System Control Center", settingsPos, Quaternion.LookRotation(Quaternion.Euler(0, 82f, 0) * headFwd));
-            settingsWin.gameObject.AddComponent<OmniAppSettings>();
-            settingsWin.Minimize();
+            if (!registeredApps.ContainsKey("settings"))
+            {
+                Vector3 settingsPos = headPos + (Quaternion.Euler(0, 82f, 0) * headFwd) * 1.65f + Vector3.down * 0.2f;
+                var settingsWin = CreateWindow("settings", "System Control Center", settingsPos, Quaternion.LookRotation(Quaternion.Euler(0, 82f, 0) * headFwd));
+                settingsWin.gameObject.AddComponent<OmniAppSettings>();
+                settingsWin.Minimize();
+            }
         }
 
         public SpatialWindow CreateWindow(string appId, string title, Vector3 position, Quaternion rotation)
         {
+            if (windowsRoot == null)
+            {
+                var wr = GameObject.Find("OmniOS_Windows_Root");
+                if (wr != null) windowsRoot = wr.transform;
+                else
+                {
+                    GameObject rootObj = new GameObject("OmniOS_Windows_Root");
+                    windowsRoot = rootObj.transform;
+                }
+            }
             GameObject winObj = new GameObject($"Window_{appId}");
             winObj.transform.SetParent(windowsRoot, false);
             winObj.transform.position = position;
@@ -426,6 +495,11 @@ namespace OmniOS.Core
 
         public void ToggleApp(string appId)
         {
+            if (registeredApps.Count == 0)
+            {
+                BootstrapDefaultApps();
+            }
+
             if (registeredApps.TryGetValue(appId, out var window))
             {
                 if (!window.IsOpen || window.IsMinimized)
@@ -511,6 +585,11 @@ namespace OmniOS.Core
 
         public SpatialWindow GetAppWindow(string appId)
         {
+            if (registeredApps.Count == 0)
+            {
+                BootstrapDefaultApps();
+            }
+
             registeredApps.TryGetValue(appId, out var win);
             return win;
         }

@@ -95,8 +95,20 @@ namespace OmniOS.Apps.MediaHub
         private TextMesh settingsNetworkText;
 
         // Camera References
+        public enum TabletCameraMode
+        {
+            RearWorldLens = 0,   // Outside Metaverse room & world (Back Camera)
+            FrontSelfieLens = 1,  // Front-facing screen camera looking at user/avatar (Front Camera)
+            PhysicalWebcam = 2   // Laptop or USB physical webcam
+        }
+
         private GameObject cameraQuad;
         private WebCamTexture localWebCam;
+        private TabletCameraMode currentCamMode = TabletCameraMode.RearWorldLens;
+        private Camera tabletVirtualCam;
+        private RenderTexture tabletCameraRT;
+        private TextMesh cameraLensBadgeText;
+        private float currentCamFOV = 60f;
 
         // Gemini References
         private TextMesh geminiResponseText;
@@ -171,7 +183,10 @@ namespace OmniOS.Apps.MediaHub
 
         private void HandleDesktopDirectInput()
         {
-            // Only perform direct mouse raycast if left-click occurs
+            // If SpatialPointer is active in scene, let it dispatch clicks to prevent double-click invocation
+            if (UnityEngine.Object.FindAnyObjectByType<OmniOS.Interaction.SpatialPointer>() != null) return;
+
+            // Direct fallback only when SpatialPointer is absent
             bool mouseClicked = false;
             Vector3 mousePos = Vector3.zero;
 
@@ -617,22 +632,28 @@ namespace OmniOS.Apps.MediaHub
             cameraQuad.transform.localScale = new Vector3(1.34f, 0.54f, 1f);
             cameraQuad.transform.localPosition = new Vector3(0, 0.08f, -0.015f);
 
-            var colliders = cameraQuad.GetComponents<Collider>();
-            foreach (var c in colliders) Destroy(c);
+            // Add BoxCollider for direct mouse / VR tap to flip camera feeds
+            var col = cameraQuad.GetComponent<BoxCollider>();
+            if (col == null) col = cameraQuad.AddComponent<BoxCollider>();
+            col.size = new Vector3(1f, 1f, 0.06f);
+            col.center = new Vector3(0, 0, -0.01f);
 
-            Material camMat = CreateSleekMaterial(null, new Color(0.12f, 0.15f, 0.22f, 1f), false);
+            Material camMat = CreateSleekMaterial(null, new Color(0.04f, 0.06f, 0.10f, 1f), false);
             cameraQuad.GetComponent<Renderer>().material = camMat;
 
-            CreateText(
-                "📸 <b>OmniCam Pro Viewfinder • 4K 60fps Spatial Optical Lens</b>",
+            cameraLensBadgeText = CreateText(
+                "📸 <b>Outside World Camera (Rear Metaverse Lens) • 4K 60fps</b>",
                 new Vector3(0, -0.22f, -0.025f),
                 parent, 26, 0.0026f,
-                new Color(1.0f, 0.75f, 0.20f, 1.0f),
+                new Color(0.0f, 0.88f, 1.0f, 1.0f),
                 TextAnchor.MiddleCenter, TextAlignment.Center
             );
 
-            CreateButton("📸 Snap 5D Photo", new Vector3(-0.25f, -0.29f, -0.025f), new Vector2(0.36f, 0.068f), parent, () => SnapPhoto(), new Color(1.0f, 0.75f, 0.20f));
-            CreateButton("🔄 Switch Lens", new Vector3(0.25f, -0.29f, -0.025f), new Vector2(0.36f, 0.068f), parent, () => SwitchCameraFeed(), new Color(0.00f, 0.88f, 1.0f));
+            // Universal 3D Buttons: 100% accessible via Mouse Click (PC .exe) & VR Controller (Quest)
+            CreateButton("📸 Snap Photo", new Vector3(-0.44f, -0.29f, -0.025f), new Vector2(0.24f, 0.068f), parent, () => SnapPhoto(), new Color(1.0f, 0.75f, 0.20f));
+            CreateButton("🔄 Flip Lens (Front ⇄ Back)", new Vector3(-0.11f, -0.29f, -0.025f), new Vector2(0.34f, 0.068f), parent, () => SwitchCameraFeed(), new Color(0.00f, 0.88f, 1.0f));
+            CreateButton("📹 PC Webcam", new Vector3(0.20f, -0.29f, -0.025f), new Vector2(0.22f, 0.068f), parent, () => ToggleHardwareWebcam(), new Color(0.25f, 0.95f, 0.55f));
+            CreateButton("🔍 Zoom", new Vector3(0.44f, -0.29f, -0.025f), new Vector2(0.18f, 0.068f), parent, () => CycleCameraZoom(), new Color(0.75f, 0.45f, 1.0f));
         }
 
         // ==================== 6. GOOGLE GEMINI AI ASSISTANT ====================
@@ -995,37 +1016,148 @@ namespace OmniOS.Apps.MediaHub
 
         #endregion
 
-        #region Camera Pro Streaming
+        #region Camera Pro Streaming (Dual-Lens: Front Screen & Outside World)
+
+        private void SetupVirtualCamera()
+        {
+            if (tabletCameraRT == null)
+            {
+                tabletCameraRT = new RenderTexture(1280, 720, 24, RenderTextureFormat.ARGB32);
+                tabletCameraRT.name = "OmniApp_TabletCamera_RT";
+                tabletCameraRT.filterMode = FilterMode.Bilinear;
+                tabletCameraRT.wrapMode = TextureWrapMode.Clamp;
+                tabletCameraRT.Create();
+            }
+
+            if (tabletVirtualCam == null)
+            {
+                GameObject camObj = new GameObject("Tablet_Optical_Lens_Camera");
+                camObj.tag = "Untagged"; // Strictly Untagged: Never hijack MainCamera
+                camObj.transform.SetParent(spatialWindow.transform, false);
+                tabletVirtualCam = camObj.AddComponent<Camera>();
+                tabletVirtualCam.clearFlags = CameraClearFlags.Skybox;
+                tabletVirtualCam.depth = -50; // Offscreen render buffer only
+                tabletVirtualCam.fieldOfView = currentCamFOV;
+                tabletVirtualCam.nearClipPlane = 0.05f;
+                tabletVirtualCam.farClipPlane = 500f;
+                tabletVirtualCam.targetTexture = tabletCameraRT;
+
+                var urpCam = camObj.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+                if (urpCam != null) urpCam.renderPostProcessing = true;
+            }
+
+            UpdateCameraTransformForMode();
+        }
+
+        private void UpdateCameraTransformForMode()
+        {
+            if (currentCamMode == TabletCameraMode.RearWorldLens)
+            {
+                StopPhysicalWebcam();
+                if (tabletVirtualCam != null)
+                {
+                    tabletVirtualCam.fieldOfView = currentCamFOV;
+                    tabletVirtualCam.transform.localPosition = new Vector3(0, 0, 0.15f);
+                    tabletVirtualCam.transform.localRotation = Quaternion.identity;
+                    tabletVirtualCam.enabled = true;
+                }
+                ApplyTextureToCameraQuad(tabletCameraRT);
+
+                if (cameraLensBadgeText != null)
+                {
+                    cameraLensBadgeText.text = "📸 <b>Outside World Camera (Rear Metaverse Lens) • 4K 60fps</b>";
+                    cameraLensBadgeText.color = new Color(0.0f, 0.88f, 1.0f);
+                }
+            }
+            else if (currentCamMode == TabletCameraMode.FrontSelfieLens)
+            {
+                StopPhysicalWebcam();
+                if (tabletVirtualCam != null)
+                {
+                    tabletVirtualCam.fieldOfView = currentCamFOV;
+                    tabletVirtualCam.transform.localPosition = new Vector3(0, 0.05f, -0.65f);
+                    tabletVirtualCam.transform.localRotation = Quaternion.Euler(0, 180f, 0);
+                    tabletVirtualCam.enabled = true;
+                }
+                ApplyTextureToCameraQuad(tabletCameraRT);
+
+                if (cameraLensBadgeText != null)
+                {
+                    cameraLensBadgeText.text = "🤳 <b>Screen Front Camera (Selfie Mirror Lens) • 4K HDR</b>";
+                    cameraLensBadgeText.color = new Color(1.0f, 0.45f, 0.85f);
+                }
+            }
+            else if (currentCamMode == TabletCameraMode.PhysicalWebcam)
+            {
+                if (tabletVirtualCam != null) tabletVirtualCam.enabled = false;
+                StartPhysicalWebcamStream();
+
+                if (cameraLensBadgeText != null)
+                {
+                    cameraLensBadgeText.text = "💻 <b>Physical PC Webcam Stream • Live USB Feed</b>";
+                    cameraLensBadgeText.color = new Color(0.25f, 0.95f, 0.55f);
+                }
+            }
+        }
+
+        private void ApplyTextureToCameraQuad(Texture tex)
+        {
+            if (cameraQuad == null || tex == null) return;
+            var rend = cameraQuad.GetComponent<Renderer>();
+            if (rend != null && rend.material != null)
+            {
+                rend.material.mainTexture = tex;
+                if (rend.material.HasProperty("_BaseMap")) rend.material.SetTexture("_BaseMap", tex);
+                if (rend.material.HasProperty("_MainTex")) rend.material.SetTexture("_MainTex", tex);
+                if (rend.material.HasProperty("_BaseColor")) rend.material.SetColor("_BaseColor", Color.white);
+            }
+        }
 
         private void StartCameraStream()
+        {
+            SetupVirtualCamera();
+        }
+
+        private void StopCameraStream()
+        {
+            StopPhysicalWebcam();
+            if (tabletVirtualCam != null) tabletVirtualCam.enabled = false;
+        }
+
+        private void StartPhysicalWebcamStream()
         {
             try
             {
                 if (DeviceCameraManager.Instance != null && DeviceCameraManager.Instance.IsDeviceCameraAvailable)
                 {
                     DeviceCameraManager.Instance.StartStreaming();
-                    if (cameraQuad != null && DeviceCameraManager.Instance.LiveCameraTexture != null)
+                    if (DeviceCameraManager.Instance.LiveCameraTexture != null)
                     {
-                        cameraQuad.GetComponent<Renderer>().material.mainTexture = DeviceCameraManager.Instance.LiveCameraTexture;
+                        ApplyTextureToCameraQuad(DeviceCameraManager.Instance.LiveCameraTexture);
                     }
                 }
                 else if (WebCamTexture.devices.Length > 0 && localWebCam == null)
                 {
                     localWebCam = new WebCamTexture(1280, 720, 30);
                     localWebCam.Play();
-                    if (cameraQuad != null)
-                    {
-                        cameraQuad.GetComponent<Renderer>().material.mainTexture = localWebCam;
-                    }
+                    ApplyTextureToCameraQuad(localWebCam);
+                }
+                else
+                {
+                    OmniOSManager.Instance?.ShowNotificationToast("⚠️ No physical webcam detected. Reverting to 3D Virtual Lens.");
+                    currentCamMode = TabletCameraMode.RearWorldLens;
+                    UpdateCameraTransformForMode();
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[OmniAppMediaHub] Camera Stream: {ex.Message}");
+                Debug.LogWarning($"[OmniAppMediaHub] Physical Webcam: {ex.Message}");
+                currentCamMode = TabletCameraMode.RearWorldLens;
+                UpdateCameraTransformForMode();
             }
         }
 
-        private void StopCameraStream()
+        private void StopPhysicalWebcam()
         {
             try
             {
@@ -1039,16 +1171,66 @@ namespace OmniOS.Apps.MediaHub
             catch { }
         }
 
+        public void SwitchCameraFeed()
+        {
+            if (currentCamMode == TabletCameraMode.RearWorldLens)
+                currentCamMode = TabletCameraMode.FrontSelfieLens;
+            else
+                currentCamMode = TabletCameraMode.RearWorldLens;
+
+            SetupVirtualCamera();
+            SpatialAudioEngine.Instance?.PlayButtonClick();
+            OmniOSManager.Instance?.ShowNotificationToast(currentCamMode == TabletCameraMode.FrontSelfieLens 
+                ? "🤳 Front Screen Camera Active (Selfie Mode)" 
+                : "📸 Outside World Camera Active (Metaverse View)");
+        }
+
+        public void ToggleHardwareWebcam()
+        {
+            if (currentCamMode == TabletCameraMode.PhysicalWebcam)
+            {
+                currentCamMode = TabletCameraMode.RearWorldLens;
+                OmniOSManager.Instance?.ShowNotificationToast("📸 Switched to 3D Virtual World Lens");
+            }
+            else
+            {
+                currentCamMode = TabletCameraMode.PhysicalWebcam;
+                OmniOSManager.Instance?.ShowNotificationToast("📹 Activating Physical Device Webcam...");
+            }
+            SetupVirtualCamera();
+            SpatialAudioEngine.Instance?.PlayButtonClick();
+        }
+
+        public void CycleCameraZoom()
+        {
+            if (currentCamFOV > 50f) currentCamFOV = 40f; // 1.5x
+            else if (currentCamFOV > 30f) currentCamFOV = 22f; // 3x
+            else currentCamFOV = 60f; // 1x
+
+            if (tabletVirtualCam != null) tabletVirtualCam.fieldOfView = currentCamFOV;
+            SpatialAudioEngine.Instance?.PlayButtonClick();
+            OmniOSManager.Instance?.ShowNotificationToast($"🔍 Camera Zoom: {(60f / currentCamFOV):F1}x");
+        }
+
         public void SnapPhoto()
         {
             SpatialAudioEngine.Instance?.PlayShutterClick();
+            StartCoroutine(FlashEffectRoutine());
             OmniOSManager.Instance?.ShowNotificationToast("📸 5D Snapshot Captured to Spatial Gallery!");
         }
 
-        public void SwitchCameraFeed()
+        private IEnumerator FlashEffectRoutine()
         {
-            SpatialAudioEngine.Instance?.PlayButtonClick();
-            OmniOSManager.Instance?.ShowNotificationToast("🔄 Camera Lens Switched: Ultra-Wide (0.5x)");
+            if (cameraQuad != null)
+            {
+                var rend = cameraQuad.GetComponent<Renderer>();
+                if (rend != null && rend.material != null)
+                {
+                    if (rend.material.HasProperty("_BaseColor")) rend.material.SetColor("_BaseColor", Color.white * 3.5f);
+                    yield return new WaitForSeconds(0.08f);
+                    if (rend.material.HasProperty("_BaseColor")) rend.material.SetColor("_BaseColor", Color.white);
+                }
+            }
         }
 
         #endregion

@@ -52,7 +52,7 @@ namespace OmniOS.Interaction
         private void Awake()
         {
             boxCollider = GetComponent<BoxCollider>();
-            boxCollider.size = new Vector3(buttonSize.x, buttonSize.y, 0.05f);
+            boxCollider.size = new Vector3(buttonSize.x, buttonSize.y, 0.08f);
             boxCollider.center = new Vector3(0, 0, -0.015f);
 
             initialScale = transform.localScale;
@@ -149,7 +149,7 @@ namespace OmniOS.Interaction
         public void SetSize(float width, float height)
         {
             buttonSize = new Vector2(width, height);
-            if (boxCollider != null) boxCollider.size = new Vector3(width, height, 0.05f);
+            if (boxCollider != null) boxCollider.size = new Vector3(width, height, 0.08f);
             if (visualBackplate != null) visualBackplate.transform.localScale = new Vector3(width, height, 1f);
         }
 
