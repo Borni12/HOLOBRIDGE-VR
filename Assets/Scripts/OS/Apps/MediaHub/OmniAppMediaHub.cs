@@ -1046,6 +1046,8 @@ namespace OmniOS.Apps.MediaHub
 
         private void SetupVirtualCamera()
         {
+            if (spatialWindow == null) spatialWindow = GetComponent<SpatialWindow>();
+
             if (tabletCameraRT == null)
             {
                 tabletCameraRT = new RenderTexture(1280, 720, 24, RenderTextureFormat.ARGB32);
@@ -1060,7 +1062,8 @@ namespace OmniOS.Apps.MediaHub
                 GameObject camObj = new GameObject("Tablet_Optical_Lens_Camera");
                 camObj.tag = "Untagged"; // Strictly Untagged: Never hijack MainCamera
                 // Parent to ContentRoot for correct spatial alignment with the window surface
-                camObj.transform.SetParent(spatialWindow.ContentRoot, false);
+                Transform camParent = (spatialWindow != null && spatialWindow.ContentRoot != null) ? spatialWindow.ContentRoot : transform;
+                camObj.transform.SetParent(camParent, false);
                 tabletVirtualCam = camObj.AddComponent<Camera>();
                 tabletVirtualCam.clearFlags = CameraClearFlags.Skybox;
                 tabletVirtualCam.depth = -50; // Offscreen render buffer only

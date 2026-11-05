@@ -1016,7 +1016,7 @@ namespace OmniGenesis.Core
             GUI.skin.box.richText = true;
 
             float hudW = 380f;
-            float hudH = isHUDMinimized ? 38f : 325f;
+            float hudH = isHUDMinimized ? 38f : 368f;
             float x = 16f;
             float y = 14f;
 
@@ -1050,6 +1050,20 @@ namespace OmniGenesis.Core
                 if (GUILayout.Button(" <b>Launchpad (Tab)</b>", GUILayout.Height(28)))
                 {
                     OmniAppLauncherBox.Instance?.ToggleLaunchpad();
+                }
+                GUILayout.EndHorizontal();
+
+                // Row B: OmniCam Pro & Scenery Explorer
+                GUILayout.BeginHorizontal();
+                GUI.color = new Color(0.25f, 0.95f, 0.55f);
+                if (GUILayout.Button("📷 <b>OmniCam Pro (3)</b>", GUILayout.Height(28)))
+                {
+                    OmniOSManager.Instance?.ToggleApp("camera");
+                }
+                GUI.color = new Color(0.35f, 0.85f, 1.0f);
+                if (GUILayout.Button("🌌 <b>Scenery Explorer (2)</b>", GUILayout.Height(28)))
+                {
+                    OmniOSManager.Instance?.ToggleApp("scenery");
                 }
                 GUILayout.EndHorizontal();
 

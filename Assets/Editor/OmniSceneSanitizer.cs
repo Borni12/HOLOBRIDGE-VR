@@ -90,8 +90,8 @@ namespace OmniOS.EditorTools
                 "Window_settings"
             };
 
-            // Collect all GameObjects in scene
-            GameObject[] allGOs = UnityEngine.Object.FindObjectsByType<GameObject>();
+            // Collect all GameObjects in scene (including inactive)
+            GameObject[] allGOs = UnityEngine.Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include);
 
             // Phase A: Purge duplicate [OMNIOS_CORE] objects, keeping strictly the best one
             GameObject primaryCore = null;
@@ -117,11 +117,12 @@ namespace OmniOS.EditorTools
                 primaryCore = new GameObject("[OMNIOS_CORE]");
                 if (!Application.isPlaying) Undo.RegisterCreatedObjectUndo(primaryCore, "Create OmniOS Core");
             }
+            primaryCore.SetActive(true);
             primaryCore.transform.position = Vector3.zero;
             primaryCore.transform.rotation = Quaternion.identity;
 
             // Phase B: Purge baked procedural roots and duplicates
-            allGOs = UnityEngine.Object.FindObjectsByType<GameObject>();
+            allGOs = UnityEngine.Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include);
             foreach (var go in allGOs)
             {
                 if (go == null || go == primaryCore) continue;
@@ -210,6 +211,7 @@ namespace OmniOS.EditorTools
             var camDevice = EnsureComp<SpatialCameraDevice>(primaryCore);
             var audioEng = EnsureComp<SpatialAudioEngine>(primaryCore);
             var bootSeq = EnsureComp<OmniOSBootSequence>(primaryCore);
+            var simpleHUD = EnsureComp<OmniSimpleHUD>(primaryCore);
 
             // Wire Serialized Properties
             SerializedObject soManager = new SerializedObject(osManager);

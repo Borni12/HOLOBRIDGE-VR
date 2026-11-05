@@ -182,7 +182,19 @@ namespace OmniOS.EditorTools
                 }
 
                 // 12. Test Physical In-World 3D Buttons (SpatialButton3D)
-                var buttons3D = UnityEngine.Object.FindObjectsByType<SpatialButton3D>();
+                var buttons3D = UnityEngine.Object.FindObjectsByType<SpatialButton3D>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                if (buttons3D.Length == 0 && osManager != null)
+                {
+                    var mediaWin = osManager.GetAppWindow("media_hub");
+                    if (mediaWin == null)
+                    {
+                        osManager.BootstrapDefaultApps();
+                        mediaWin = osManager.GetAppWindow("media_hub");
+                    }
+                    if (mediaWin != null) mediaWin.Restore();
+                    buttons3D = UnityEngine.Object.FindObjectsByType<SpatialButton3D>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                }
+
                 int buttonClicksTriggered = 0;
                 foreach (var b in buttons3D)
                 {
@@ -216,7 +228,7 @@ namespace OmniOS.EditorTools
 
             Debug.Log($"<color=#00e5ff>[OmniTest]</color> Diagnostic complete! {passed}/{total} Passed.\nReport saved to: {reportPath}");
 
-            if (showPopup)
+            if (showPopup && !Application.isBatchMode)
             {
                 EditorUtility.DisplayDialog(
                     "OmniOS Button & Key Diagnostics",
