@@ -110,6 +110,10 @@ namespace OmniOS.Apps.MediaHub
         private TextMesh cameraLensBadgeText;
         private float currentCamFOV = 60f;
 
+        // Cached SpatialPointer reference — avoids expensive FindAnyObjectByType every frame
+        private OmniOS.Interaction.SpatialPointer cachedSpatialPointer;
+        private bool spatialPointerSearched = false;
+
         // Gemini References
         private TextMesh geminiResponseText;
 
@@ -167,15 +171,30 @@ namespace OmniOS.Apps.MediaHub
 
             // 2. Direct desktop mouse click fail-safe for Standalone .exe / Mac / Linux
             HandleDesktopDirectInput();
+
+            // 3. Live Camera Viewfinder feed update
+            if (currentTab == HubTab.CameraPro)
+            {
+                UpdateCameraProFeed();
+            }
         }
 
         private void EnsureEventSystem()
         {
-            if (UnityEngine.EventSystems.EventSystem.current == null)
+            var allES = UnityEngine.Object.FindObjectsByType<UnityEngine.EventSystems.EventSystem>();
+            if (allES.Length > 1)
+            {
+                // Purge duplicates to guarantee exactly ONE event system in the scene
+                for (int i = 1; i < allES.Length; i++)
+                {
+                    if (allES[i] != null) Destroy(allES[i].gameObject);
+                }
+            }
+            else if (allES.Length == 0)
             {
                 GameObject esObj = new GameObject("[OMNI_EVENTSYSTEM]");
                 esObj.AddComponent<UnityEngine.EventSystems.EventSystem>();
-                esObj.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
+                esObj.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
             }
         }
 
@@ -184,7 +203,13 @@ namespace OmniOS.Apps.MediaHub
         private void HandleDesktopDirectInput()
         {
             // If SpatialPointer is active in scene, let it dispatch clicks to prevent double-click invocation
-            if (UnityEngine.Object.FindAnyObjectByType<OmniOS.Interaction.SpatialPointer>() != null) return;
+            // Cache the lookup result to avoid expensive FindAnyObjectByType every frame
+            if (!spatialPointerSearched)
+            {
+                cachedSpatialPointer = UnityEngine.Object.FindAnyObjectByType<OmniOS.Interaction.SpatialPointer>();
+                spatialPointerSearched = true;
+            }
+            if (cachedSpatialPointer != null) return;
 
             // Direct fallback only when SpatialPointer is absent
             bool mouseClicked = false;
@@ -618,9 +643,10 @@ namespace OmniOS.Apps.MediaHub
                 TextAnchor.MiddleCenter, TextAlignment.Center
             );
 
-            // Diagnostics Buttons
-            CreateButton("📡 Run Live Internet Ping Test", new Vector3(-0.28f, -0.27f, -0.025f), new Vector2(0.48f, 0.070f), parent, () => PingInternet(), new Color(0.20f, 0.95f, 0.45f));
-            CreateButton("🌐 Open Google Connectivity Check", new Vector3(0.28f, -0.27f, -0.025f), new Vector2(0.48f, 0.070f), parent, () => OpenUrlInBrowser("https://www.google.com"), new Color(0.20f, 0.60f, 1.0f));
+            // Diagnostics & System Action Buttons
+            CreateButton("📡 Live Internet Ping", new Vector3(-0.40f, -0.27f, -0.025f), new Vector2(0.36f, 0.070f), parent, () => PingInternet(), new Color(0.20f, 0.95f, 0.45f));
+            CreateButton("🌐 Google Connectivity", new Vector3(0.0f, -0.27f, -0.025f), new Vector2(0.36f, 0.070f), parent, () => OpenUrlInBrowser("https://www.google.com"), new Color(0.20f, 0.60f, 1.0f));
+            CreateButton("🔄 Full System Reload", new Vector3(0.40f, -0.27f, -0.025f), new Vector2(0.36f, 0.070f), parent, () => OmniOSManager.Instance?.FullSystemReload(), new Color(0.0f, 0.95f, 1.0f));
         }
 
         // ==================== 5. OMNICAM PRO (CAMERA) ====================
@@ -1033,7 +1059,8 @@ namespace OmniOS.Apps.MediaHub
             {
                 GameObject camObj = new GameObject("Tablet_Optical_Lens_Camera");
                 camObj.tag = "Untagged"; // Strictly Untagged: Never hijack MainCamera
-                camObj.transform.SetParent(spatialWindow.transform, false);
+                // Parent to ContentRoot for correct spatial alignment with the window surface
+                camObj.transform.SetParent(spatialWindow.ContentRoot, false);
                 tabletVirtualCam = camObj.AddComponent<Camera>();
                 tabletVirtualCam.clearFlags = CameraClearFlags.Skybox;
                 tabletVirtualCam.depth = -50; // Offscreen render buffer only
@@ -1041,9 +1068,14 @@ namespace OmniOS.Apps.MediaHub
                 tabletVirtualCam.nearClipPlane = 0.05f;
                 tabletVirtualCam.farClipPlane = 500f;
                 tabletVirtualCam.targetTexture = tabletCameraRT;
+                tabletVirtualCam.cullingMask = ~0; // Render all layers
 
                 var urpCam = camObj.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
-                if (urpCam != null) urpCam.renderPostProcessing = true;
+                if (urpCam != null)
+                {
+                    urpCam.renderType = UnityEngine.Rendering.Universal.CameraRenderType.Base; // Required for URP RenderTexture output
+                    urpCam.renderPostProcessing = true;
+                }
             }
 
             UpdateCameraTransformForMode();
@@ -1057,7 +1089,7 @@ namespace OmniOS.Apps.MediaHub
                 if (tabletVirtualCam != null)
                 {
                     tabletVirtualCam.fieldOfView = currentCamFOV;
-                    tabletVirtualCam.transform.localPosition = new Vector3(0, 0, 0.15f);
+                    tabletVirtualCam.transform.localPosition = new Vector3(0, 0, 1.0f); // 1m in front of window, looking into scene
                     tabletVirtualCam.transform.localRotation = Quaternion.identity;
                     tabletVirtualCam.enabled = true;
                 }
@@ -1075,7 +1107,7 @@ namespace OmniOS.Apps.MediaHub
                 if (tabletVirtualCam != null)
                 {
                     tabletVirtualCam.fieldOfView = currentCamFOV;
-                    tabletVirtualCam.transform.localPosition = new Vector3(0, 0.05f, -0.65f);
+                    tabletVirtualCam.transform.localPosition = new Vector3(0, 0, -1.2f); // Behind tablet, looking back at user
                     tabletVirtualCam.transform.localRotation = Quaternion.Euler(0, 180f, 0);
                     tabletVirtualCam.enabled = true;
                 }
@@ -1104,13 +1136,14 @@ namespace OmniOS.Apps.MediaHub
         {
             if (cameraQuad == null || tex == null) return;
             var rend = cameraQuad.GetComponent<Renderer>();
-            if (rend != null && rend.material != null)
-            {
-                rend.material.mainTexture = tex;
-                if (rend.material.HasProperty("_BaseMap")) rend.material.SetTexture("_BaseMap", tex);
-                if (rend.material.HasProperty("_MainTex")) rend.material.SetTexture("_MainTex", tex);
-                if (rend.material.HasProperty("_BaseColor")) rend.material.SetColor("_BaseColor", Color.white);
-            }
+            if (rend == null) return;
+            if (rend.material == null) rend.material = CreateSleekMaterial(null, Color.white, false);
+
+            rend.material.mainTexture = tex;
+            if (rend.material.HasProperty("_BaseMap")) rend.material.SetTexture("_BaseMap", tex);
+            if (rend.material.HasProperty("_MainTex")) rend.material.SetTexture("_MainTex", tex);
+            if (rend.material.HasProperty("_BaseColor")) rend.material.SetColor("_BaseColor", Color.white);
+            rend.material.color = Color.white;
         }
 
         private void StartCameraStream()
@@ -1179,6 +1212,7 @@ namespace OmniOS.Apps.MediaHub
                 currentCamMode = TabletCameraMode.RearWorldLens;
 
             SetupVirtualCamera();
+            UpdateCameraTransformForMode(); // Ensure transform is updated after mode change
             SpatialAudioEngine.Instance?.PlayButtonClick();
             OmniOSManager.Instance?.ShowNotificationToast(currentCamMode == TabletCameraMode.FrontSelfieLens 
                 ? "🤳 Front Screen Camera Active (Selfie Mode)" 
@@ -1198,6 +1232,7 @@ namespace OmniOS.Apps.MediaHub
                 OmniOSManager.Instance?.ShowNotificationToast("📹 Activating Physical Device Webcam...");
             }
             SetupVirtualCamera();
+            UpdateCameraTransformForMode(); // Ensure transform is updated after mode change
             SpatialAudioEngine.Instance?.PlayButtonClick();
         }
 
@@ -1212,11 +1247,76 @@ namespace OmniOS.Apps.MediaHub
             OmniOSManager.Instance?.ShowNotificationToast($"🔍 Camera Zoom: {(60f / currentCamFOV):F1}x");
         }
 
+        private void UpdateCameraProFeed()
+        {
+            if (currentCamMode == TabletCameraMode.PhysicalWebcam)
+            {
+                if (DeviceCameraManager.Instance != null && DeviceCameraManager.Instance.IsStreaming && DeviceCameraManager.Instance.LiveCameraTexture != null)
+                {
+                    ApplyTextureToCameraQuad(DeviceCameraManager.Instance.LiveCameraTexture);
+                }
+                else if (localWebCam != null && localWebCam.isPlaying)
+                {
+                    ApplyTextureToCameraQuad(localWebCam);
+                }
+            }
+            else if (tabletCameraRT != null)
+            {
+                ApplyTextureToCameraQuad(tabletCameraRT);
+            }
+        }
+
         public void SnapPhoto()
         {
             SpatialAudioEngine.Instance?.PlayShutterClick();
             StartCoroutine(FlashEffectRoutine());
-            OmniOSManager.Instance?.ShowNotificationToast("📸 5D Snapshot Captured to Spatial Gallery!");
+
+            Texture2D snapshot = null;
+            if (currentCamMode == TabletCameraMode.PhysicalWebcam)
+            {
+                if (DeviceCameraManager.Instance != null && DeviceCameraManager.Instance.IsStreaming)
+                {
+                    snapshot = DeviceCameraManager.Instance.CaptureWebcamSnapshot();
+                }
+                else if (localWebCam != null && localWebCam.isPlaying)
+                {
+                    snapshot = new Texture2D(localWebCam.width, localWebCam.height, TextureFormat.RGB24, false);
+                    snapshot.SetPixels(localWebCam.GetPixels());
+                    snapshot.Apply();
+                }
+            }
+            else if (tabletCameraRT != null)
+            {
+                RenderTexture prev = RenderTexture.active;
+                RenderTexture.active = tabletCameraRT;
+                snapshot = new Texture2D(tabletCameraRT.width, tabletCameraRT.height, TextureFormat.RGB24, false);
+                snapshot.ReadPixels(new Rect(0, 0, tabletCameraRT.width, tabletCameraRT.height), 0, 0);
+                snapshot.Apply();
+                RenderTexture.active = prev;
+            }
+
+            if (snapshot != null)
+            {
+                try
+                {
+                    string dir = System.IO.Path.Combine(Application.persistentDataPath, "SpatialPhotos");
+                    if (!System.IO.Directory.Exists(dir)) System.IO.Directory.CreateDirectory(dir);
+                    string filename = $"TabletPhoto_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+                    string fullPath = System.IO.Path.Combine(dir, filename);
+                    System.IO.File.WriteAllBytes(fullPath, snapshot.EncodeToPNG());
+                    Debug.Log($"<color=cyan>[TabletCam]</color> Photo saved to: {fullPath}");
+                    OmniOSManager.Instance?.ShowNotificationToast($"📸 Saved: {filename}");
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[TabletCam] Save failed: {ex.Message}");
+                    OmniOSManager.Instance?.ShowNotificationToast("📸 Photo captured!");
+                }
+            }
+            else
+            {
+                OmniOSManager.Instance?.ShowNotificationToast("📸 5D Snapshot Captured to Spatial Gallery!");
+            }
         }
 
         private IEnumerator FlashEffectRoutine()

@@ -18,7 +18,17 @@ namespace OmniOS.Core
     public class SpatialAudioEngine : MonoBehaviour
     {
         private static SpatialAudioEngine instance;
-        public static SpatialAudioEngine Instance => instance;
+        public static SpatialAudioEngine Instance
+        {
+            get
+            {
+                if (instance == null || !instance)
+                {
+                    instance = UnityEngine.Object.FindAnyObjectByType<SpatialAudioEngine>();
+                }
+                return instance;
+            }
+        }
 
         private AudioSource sfxSource;
         private AudioSource ambientSource;
@@ -35,7 +45,7 @@ namespace OmniOS.Core
 
         private void Awake()
         {
-            if (instance != null && instance != this)
+            if (instance != null && instance != this && instance.gameObject != null)
             {
                 Destroy(gameObject);
                 return;
@@ -52,6 +62,11 @@ namespace OmniOS.Core
             ambientSource.volume = 0.18f;
 
             SynthesizeAllClips();
+        }
+
+        private void OnDestroy()
+        {
+            if (instance == this) instance = null;
         }
 
         private void SynthesizeAllClips()

@@ -21,7 +21,17 @@ namespace OmniOS.Core
     public class OmniAppLauncherBox : MonoBehaviour
     {
         private static OmniAppLauncherBox instance;
-        public static OmniAppLauncherBox Instance => instance;
+        public static OmniAppLauncherBox Instance
+        {
+            get
+            {
+                if (instance == null || !instance)
+                {
+                    instance = UnityEngine.Object.FindAnyObjectByType<OmniAppLauncherBox>();
+                }
+                return instance;
+            }
+        }
 
         public static bool IsOpen { get; set; } = false; // Minimized by default to keep 3D view clean, toggle with TAB
         public static bool AutoCloseOnLaunch { get; set; } = false; // User toggle to auto-close launchpad when app is brought to 3D front
@@ -82,12 +92,17 @@ namespace OmniOS.Core
 
         private void Awake()
         {
-            if (instance != null && instance != this)
+            if (instance != null && instance != this && instance.gameObject != null)
             {
                 Destroy(this); // Safe: destroy this component, never the GameObject
                 return;
             }
             instance = this;
+        }
+
+        private void OnDestroy()
+        {
+            if (instance == this) instance = null;
         }
 
         private void Update()
@@ -423,6 +438,16 @@ namespace OmniOS.Core
             AutoCloseOnLaunch = GUILayout.Toggle(AutoCloseOnLaunch, "Auto-close on Launch", GUILayout.Width(160), GUILayout.Height(28));
 
             GUILayout.Space(8);
+
+            // Master Reload Button in Header
+            GUI.color = new Color(0.0f, 1.0f, 0.9f);
+            if (GUILayout.Button("🔄 Reload [R]", GUILayout.Width(105), GUILayout.Height(28)))
+            {
+                OmniOSManager.Instance?.FullSystemReload();
+            }
+            GUI.color = Color.white;
+
+            GUILayout.Space(4);
 
             // Close Button
             GUI.color = new Color(1.0f, 0.4f, 0.4f);

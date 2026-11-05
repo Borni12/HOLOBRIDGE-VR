@@ -98,7 +98,7 @@ namespace OmniGenesis.Core
             if (cam == null)
             {
                 // Search for active cameras in the scene that render directly to the screen display (targetTexture == null)
-                Camera[] allCams = UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
+                Camera[] allCams = UnityEngine.Object.FindObjectsByType<Camera>();
 
                 // Priority 1: Direct display camera tagged "MainCamera"
                 foreach (var c in allCams)

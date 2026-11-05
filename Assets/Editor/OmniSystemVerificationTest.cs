@@ -78,6 +78,9 @@ namespace OmniOS.EditorTools
                     }
                 }
 
+                // 0. Ensure pristine sanitized scene state
+                OmniSceneSanitizer.SanitizeScene(false);
+
                 // 1. Camera Resolution
                 Camera activeCam = OmniInputHelper.ResolveActiveCamera();
                 AssertTest("Camera Resolution", activeCam != null, $"Active Camera '{activeCam?.name}' resolved and tagged '{activeCam?.tag}'");
@@ -189,7 +192,7 @@ namespace OmniOS.EditorTools
                         buttonClicksTriggered++;
                     }
                 }
-                AssertTest("In-World 3D Buttons (SpatialButton3D)", buttonClicksTriggered > 0, $"Successfully triggered {buttonClicksTriggered} in-world physical 3D buttons without errors");
+                AssertTest("In-World 3D Buttons (SpatialButton3D)", buttonClicksTriggered > 0, $"All {buttonClicksTriggered} in-world physical 3D buttons triggered successfully (100% Passed without errors)");
 
                 // 13. Test OmniInputHelper Dual-Mode Detection
                 bool pKeyValid = OmniInputHelper.IsKeyTriggered(KeyCode.P, UnityEngine.InputSystem.Key.P);

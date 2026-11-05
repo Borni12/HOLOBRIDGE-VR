@@ -22,7 +22,17 @@ namespace OmniGenesis.Core
     public class OmniGenesis5DExperience : MonoBehaviour
     {
         private static OmniGenesis5DExperience instance;
-        public static OmniGenesis5DExperience Instance => instance;
+        public static OmniGenesis5DExperience Instance
+        {
+            get
+            {
+                if (instance == null || !instance)
+                {
+                    instance = UnityEngine.Object.FindAnyObjectByType<OmniGenesis5DExperience>();
+                }
+                return instance;
+            }
+        }
 
         [Header("System References")]
         [SerializeField] private Transform headCamera;
@@ -78,9 +88,12 @@ namespace OmniGenesis.Core
         // 6. Neural Gaussian Particles
         private ParticleSystem gaussianParticles;
 
+        // 7. 2D HUD State
+        private bool isHUDMinimized = false;
+
         private void Awake()
         {
-            if (instance != null && instance != this)
+            if (instance != null && instance != this && instance.gameObject != null)
             {
                 Destroy(this);
                 return;
@@ -125,6 +138,44 @@ namespace OmniGenesis.Core
 #else
             Destroy(go);
 #endif
+        }
+
+        private void PurgeExisting5DRoots()
+        {
+            SafeDestroy(realityPeelRoot);
+            SafeDestroy(matterWeaveRoot);
+            SafeDestroy(multiverseOrbsRoot);
+            SafeDestroy(avatarHandoffRoot);
+            SafeDestroy(gaussianSplatsRoot);
+
+            realityPeelRoot = null;
+            matterWeaveRoot = null;
+            multiverseOrbsRoot = null;
+            avatarHandoffRoot = null;
+            gaussianSplatsRoot = null;
+
+            string[] rootNames = new string[]
+            {
+                "OMNI_5D_RealityPeel_Root",
+                "OMNI_5D_MatterWeave_Root",
+                "OMNI_5D_Multiverse_Root",
+                "OMNI_5D_Avatar_Sophia_Root",
+                "OMNI_5D_GaussianField_Root"
+            };
+
+            var allGOs = UnityEngine.Object.FindObjectsByType<GameObject>();
+            foreach (var go in allGOs)
+            {
+                if (go == null) continue;
+                for (int i = 0; i < rootNames.Length; i++)
+                {
+                    if (go.name == rootNames[i])
+                    {
+                        SafeDestroy(go);
+                        break;
+                    }
+                }
+            }
         }
 
         public static Material CreateURPMaterial(Color color, Texture2D tex = null, bool transparent = false)
@@ -184,6 +235,8 @@ namespace OmniGenesis.Core
 
         private void BuildAll5DSystems()
         {
+            PurgeExisting5DRoots();
+
             Vector3 centerPos = headCamera != null ? headCamera.position : Vector3.up * 1.6f;
             Vector3 centerFwd = headCamera != null ? headCamera.forward : Vector3.forward;
             centerFwd.y = 0;
@@ -214,9 +267,13 @@ namespace OmniGenesis.Core
             realityPeelRoot = new GameObject("OMNI_5D_RealityPeel_Root");
             realityPeelRoot.transform.SetParent(transform, false);
 
-            Vector3 portalPos = centerPos + fwd * 1.45f + Vector3.up * 0.12f;
+            // Position gracefully in Left Lounge (2.5m forward, 1.5m left) facing user, leaving direct center open for Tablet
+            Vector3 right = Vector3.Cross(Vector3.up, fwd).normalized;
+            Vector3 portalPos = centerPos + fwd * 2.5f - right * 1.5f + Vector3.up * 0.12f;
             realityPeelRoot.transform.position = portalPos;
-            realityPeelRoot.transform.rotation = Quaternion.LookRotation(fwd);
+            Vector3 lookToUser = centerPos - portalPos;
+            lookToUser.y = 0;
+            realityPeelRoot.transform.rotation = Quaternion.LookRotation(lookToUser);
 
             // 2D Portal Backplate Quad
             GameObject portalQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -431,10 +488,13 @@ namespace OmniGenesis.Core
             matterWeaveRoot = new GameObject("OMNI_5D_MatterWeave_Root");
             matterWeaveRoot.transform.SetParent(transform, false);
 
+            // Position in Far Left Lounge (2.2m forward, 2.5m left) with dedicated pedestal facing user
             Vector3 right = Vector3.Cross(Vector3.up, fwd).normalized;
-            Vector3 labPos = centerPos + fwd * 1.35f - right * 0.85f + Vector3.down * 0.15f;
+            Vector3 labPos = centerPos + fwd * 2.2f - right * 2.5f - Vector3.up * 0.10f;
             matterWeaveRoot.transform.position = labPos;
-            matterWeaveRoot.transform.rotation = Quaternion.LookRotation(fwd + right * 0.35f);
+            Vector3 lookToUser = centerPos - labPos;
+            lookToUser.y = 0;
+            matterWeaveRoot.transform.rotation = Quaternion.LookRotation(lookToUser);
 
             // Holographic Pedestal
             GameObject pedestal = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
@@ -517,9 +577,13 @@ namespace OmniGenesis.Core
             multiverseOrbsRoot = new GameObject("OMNI_5D_Multiverse_Root");
             multiverseOrbsRoot.transform.SetParent(transform, false);
 
-            Vector3 orbsCenter = centerPos + fwd * 1.55f + Vector3.up * 0.75f;
+            // Position in Right Lounge (2.5m forward, 1.5m right, raised) hovering gracefully
+            Vector3 right = Vector3.Cross(Vector3.up, fwd).normalized;
+            Vector3 orbsCenter = centerPos + fwd * 2.5f + right * 1.5f + Vector3.up * 0.35f;
             multiverseOrbsRoot.transform.position = orbsCenter;
-            multiverseOrbsRoot.transform.rotation = Quaternion.LookRotation(fwd);
+            Vector3 lookToUser = centerPos - orbsCenter;
+            lookToUser.y = 0;
+            multiverseOrbsRoot.transform.rotation = Quaternion.LookRotation(lookToUser);
 
             Shader unlit = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default");
 
@@ -608,10 +672,13 @@ namespace OmniGenesis.Core
             avatarHandoffRoot = new GameObject("OMNI_5D_Avatar_Sophia_Root");
             avatarHandoffRoot.transform.SetParent(transform, false);
 
+            // Position in Far Right Lounge (2.2m forward, 2.5m right) standing naturally facing user
             Vector3 right = Vector3.Cross(Vector3.up, fwd).normalized;
-            Vector3 avatarPos = centerPos + fwd * 1.55f + right * 0.85f;
+            Vector3 avatarPos = centerPos + fwd * 2.2f + right * 2.5f;
             avatarHandoffRoot.transform.position = avatarPos;
-            avatarHandoffRoot.transform.rotation = Quaternion.LookRotation(-fwd);
+            Vector3 lookToUser = centerPos - avatarPos;
+            lookToUser.y = 0;
+            avatarHandoffRoot.transform.rotation = Quaternion.LookRotation(lookToUser);
 
             avatarTransform = avatarHandoffRoot.transform;
 
@@ -702,26 +769,26 @@ namespace OmniGenesis.Core
         {
             gaussianSplatsRoot = new GameObject("OMNI_5D_GaussianField_Root");
             gaussianSplatsRoot.transform.SetParent(transform, false);
-            gaussianSplatsRoot.transform.position = centerPos + Vector3.up * 1.0f;
+            gaussianSplatsRoot.transform.position = centerPos + Vector3.up * 1.5f;
 
             gaussianParticles = gaussianSplatsRoot.AddComponent<ParticleSystem>();
             var main = gaussianParticles.main;
             main.loop = true;
-            main.maxParticles = 1200;
-            main.startLifetime = 10f;
-            main.startSpeed = 0.05f;
-            main.startSize = 0.045f;
-            main.startColor = new Color(0.0f, 0.85f, 1.0f, 0.65f);
+            main.maxParticles = 80; // Subtle, elegant ambient cyber aura instead of dense blinding cloud
+            main.startLifetime = 8f;
+            main.startSpeed = 0.02f;
+            main.startSize = 0.02f;
+            main.startColor = new Color(0.0f, 0.85f, 1.0f, 0.25f);
 
             var emission = gaussianParticles.emission;
-            emission.rateOverTime = 80f;
+            emission.rateOverTime = 8f;
 
             var shape = gaussianParticles.shape;
             shape.shapeType = ParticleSystemShapeType.Sphere;
-            shape.radius = 4.5f;
+            shape.radius = 5.0f;
 
             var renderer = gaussianParticles.GetComponent<ParticleSystemRenderer>();
-            renderer.material = CreateURPMaterial(new Color(0.0f, 0.85f, 1.0f, 0.65f), null, true);
+            renderer.material = CreateURPMaterial(new Color(0.0f, 0.85f, 1.0f, 0.25f), null, true);
         }
         #endregion
 
@@ -913,64 +980,22 @@ namespace OmniGenesis.Core
             if (OmniInputHelper.CheckR()) RebuildAll5DSystems();
         }
 
+        private void OnDestroy()
+        {
+            if (instance == this) instance = null;
+        }
+
         private void OnGUI()
         {
             OmniInputHelper.RegisterGUIEvent(Event.current);
-            GUI.skin.button.richText = true;
-            GUI.skin.label.richText = true;
-            GUI.skin.box.richText = true;
 
-            // High-Contrast Interactive 5D HUD Overlay (Top-Left)
-            float hudW = 360f;
-            float hudH = 245f;
-            float x = 16f;
-            float y = 16f;
-
-            GUI.color = new Color(0.04f, 0.08f, 0.14f, 0.94f);
-            GUI.Box(new Rect(x, y, hudW, hudH), "");
-            GUI.color = Color.white;
-
-            GUILayout.BeginArea(new Rect(x + 10, y + 8, hudW - 20, hudH - 16));
-
-            GUILayout.Label("<b><color=#00e5ff>⚡ OMNI-GENESIS 5D ARCHITECTURE</color></b>");
-            GUILayout.Space(2);
-
-            // 1. Reality-Peel Button
-            GUI.color = isPeelActive ? new Color(0.1f, 1.0f, 0.6f) : new Color(0.0f, 0.85f, 1.0f);
-            string peelLabel = isPeelActive ? "🔮 1. Reality-Peel: [UNPROJECTED 360°] (P)" : "🔮 1. Reality-Peel: [2D Portal Frame] (P)";
-            if (GUILayout.Button(peelLabel, GUILayout.Height(28)))
-            {
-                TriggerRealityPeel();
-            }
-
-            // 2. Matter-Weave Button
-            GUI.color = new Color(0.2f, 0.95f, 0.95f);
-            string matterLabel = $"⚛️ 2. Matter-Weave: [{currentStiffness.ToString().ToUpper()}] (M)";
-            if (GUILayout.Button(matterLabel, GUILayout.Height(28)))
-            {
-                int next = ((int)currentStiffness + 1) % 3;
-                SetStiffness((MaterialStiffness)next);
-            }
-
-            // 3. Multiverse Orbs Button
-            GUI.color = new Color(1.0f, 0.65f, 1.0f);
-            string orbsLabel = $"⏳ 3. Multiverse Orbs: [Timeline {activeTimelineIndex + 1}/5] (O)";
-            if (GUILayout.Button(orbsLabel, GUILayout.Height(28)))
-            {
-                ToggleMultiverseOrbs();
-            }
-
-            // 4. Avatar Sophia Button
-            GUI.color = isHandoffActive ? new Color(0.2f, 1.0f, 0.5f) : new Color(1.0f, 0.85f, 0.2f);
-            string handoffLabel = isHandoffActive ? "🤝 4. Sophia: [REACHING IK HANDOFF...] (J)" : "🤝 4. Sophia Handoff: [Ready] (J)";
-            if (GUILayout.Button(handoffLabel, GUILayout.Height(28)))
-            {
-                TriggerHandoff();
-            }
-
-            // 5. Full Reload & Auto-Save Button
-            GUI.color = new Color(0.0f, 0.95f, 1.0f);
-            if (GUILayout.Button("🔄 <b>FULL SYSTEM RELOAD & AUTO-SAVE (R)</b>", GUILayout.Height(32)))
+            // 1. Top-Right Dedicated Floating Quick Reload Button (Always accessible)
+            float rW = 160f;
+            float rH = 34f;
+            float rx = Screen.width - rW - 16f;
+            float ry = 14f;
+            GUI.color = new Color(0.0f, 0.95f, 1.0f, 0.95f);
+            if (GUI.Button(new Rect(rx, ry, rW, rH), "<b>🔄 Full Reload (R)</b>"))
             {
                 if (OmniOSManager.Instance != null)
                 {
@@ -983,8 +1008,102 @@ namespace OmniGenesis.Core
             }
             GUI.color = Color.white;
 
-            GUILayout.Space(2);
-            GUILayout.Label("<color=#88aacc><size=11>Tip: Click buttons or press keys (P, M, O, J, R, Space, Tab)</size></color>");
+            // Only render 2D HUD when enabled (F1 toggles)
+            if (!OmniOS.Core.OmniOSManager.Show2DOverlay) return;
+
+            GUI.skin.button.richText = true;
+            GUI.skin.label.richText = true;
+            GUI.skin.box.richText = true;
+
+            float hudW = 380f;
+            float hudH = isHUDMinimized ? 38f : 325f;
+            float x = 16f;
+            float y = 14f;
+
+            GUI.color = new Color(0.04f, 0.08f, 0.14f, 0.96f);
+            GUI.Box(new Rect(x, y, hudW, hudH), "");
+            GUI.color = Color.white;
+
+            GUILayout.BeginArea(new Rect(x + 10, y + 6, hudW - 20, hudH - 12));
+
+            // Header with Title and Minimize toggle button
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("<b><color=#00e5ff>📱 ANDROID 15 & 5D CONTROL CENTER</color></b>", GUILayout.ExpandWidth(true));
+            if (GUILayout.Button(isHUDMinimized ? "<b>[+] Expand</b>" : "<b>[-] Hide</b>", GUILayout.Width(76), GUILayout.Height(22)))
+            {
+                isHUDMinimized = !isHUDMinimized;
+            }
+            GUILayout.EndHorizontal();
+
+            if (!isHUDMinimized)
+            {
+                GUILayout.Space(4);
+
+                // Row A: Android 15 Tablet & Apple Launchpad
+                GUILayout.BeginHorizontal();
+                GUI.color = new Color(0.2f, 0.95f, 0.55f);
+                if (GUILayout.Button("📱 <b>Android 15 Tablet (1)</b>", GUILayout.Height(28)))
+                {
+                    OmniOSManager.Instance?.ToggleApp("media_hub");
+                }
+                GUI.color = new Color(1.0f, 0.75f, 0.15f);
+                if (GUILayout.Button(" <b>Launchpad (Tab)</b>", GUILayout.Height(28)))
+                {
+                    OmniAppLauncherBox.Instance?.ToggleLaunchpad();
+                }
+                GUILayout.EndHorizontal();
+
+                // 1. Reality-Peel Button
+                GUI.color = isPeelActive ? new Color(0.1f, 1.0f, 0.6f) : new Color(0.0f, 0.85f, 1.0f);
+                string peelLabel = isPeelActive ? "🔮 1. Reality-Peel: [UNPROJECTED 360°] (P)" : "🔮 1. Reality-Peel: [2D Portal Frame] (P)";
+                if (GUILayout.Button(peelLabel, GUILayout.Height(28)))
+                {
+                    TriggerRealityPeel();
+                }
+
+                // 2. Matter-Weave Button
+                GUI.color = new Color(0.2f, 0.95f, 0.95f);
+                string matterLabel = $"⚛️ 2. Matter-Weave: [{currentStiffness.ToString().ToUpper()}] (M)";
+                if (GUILayout.Button(matterLabel, GUILayout.Height(28)))
+                {
+                    int next = ((int)currentStiffness + 1) % 3;
+                    SetStiffness((MaterialStiffness)next);
+                }
+
+                // 3. Multiverse Orbs Button
+                GUI.color = new Color(1.0f, 0.65f, 1.0f);
+                string orbsLabel = $"⏳ 3. Multiverse Orbs: [Timeline {activeTimelineIndex + 1}/5] (O)";
+                if (GUILayout.Button(orbsLabel, GUILayout.Height(28)))
+                {
+                    ToggleMultiverseOrbs();
+                }
+
+                // 4. Avatar Sophia Button
+                GUI.color = isHandoffActive ? new Color(0.2f, 1.0f, 0.5f) : new Color(1.0f, 0.85f, 0.2f);
+                string handoffLabel = isHandoffActive ? "🤝 4. Sophia: [REACHING IK HANDOFF...] (J)" : "🤝 4. Sophia Handoff: [Ready] (J)";
+                if (GUILayout.Button(handoffLabel, GUILayout.Height(28)))
+                {
+                    TriggerHandoff();
+                }
+
+                // 5. Full Reload & Auto-Save Master Button
+                GUI.color = new Color(0.0f, 1.0f, 0.9f);
+                if (GUILayout.Button("🔄 <b>FULL SYSTEM RELOAD & AUTO-SAVE (R)</b>", GUILayout.Height(34)))
+                {
+                    if (OmniOSManager.Instance != null)
+                    {
+                        OmniOSManager.Instance.FullSystemReload();
+                    }
+                    else
+                    {
+                        RebuildAll5DSystems();
+                    }
+                }
+                GUI.color = Color.white;
+
+                GUILayout.Space(2);
+                GUILayout.Label("<color=#88aacc><size=11>Shortcuts: [1] Android, [Tab] Launchpad, [P] Peel, [M] Matter, [R] Reload</size></color>");
+            }
 
             GUILayout.EndArea();
         }

@@ -73,11 +73,21 @@ namespace OmniOS.Interaction
         private bool isUsingVR = false;
 
         private static SpatialPointer instance;
-        public static SpatialPointer Instance => instance;
+        public static SpatialPointer Instance
+        {
+            get
+            {
+                if (instance == null || !instance)
+                {
+                    instance = UnityEngine.Object.FindAnyObjectByType<SpatialPointer>();
+                }
+                return instance;
+            }
+        }
 
         private void Awake()
         {
-            if (instance != null && instance != this)
+            if (instance != null && instance != this && instance.gameObject != null)
             {
                 Destroy(this);
                 return;
@@ -419,7 +429,9 @@ namespace OmniOS.Interaction
                     if (colGo.GetComponentInParent<SpatialButton3D>() != null ||
                         colGo.GetComponentInParent<SpatialSlider3D>() != null ||
                         colGo.name.Contains("Window_Btn") ||
-                        colGo.name.Contains("GrabBar"))
+                        colGo.name.Contains("GrabBar") ||
+                        colGo.name.Contains("Camera_Viewfinder") ||
+                        colGo.name.Contains("CameraApp_LiveScreen"))
                     {
                         if (raycastHits[i].distance < bestDist)
                         {
@@ -529,33 +541,56 @@ namespace OmniOS.Interaction
                 }
             }
 
-            // 2. Button Instant Press / Click (100% reliable)
-            if (IsTriggerDown && hoveredButton != null)
+            // 2. Button & Live Screen Instant Press / Click (100% reliable)
+            if (IsTriggerDown)
             {
-                pressedButton = hoveredButton;
-                pressedButton.OnPointerDown();
-                TriggerHaptic(0.65f, 0.04f);
-            }
-            else if (IsTriggerDown && hoveredButton == null && !isUsingVR)
-            {
-                // Direct ScreenPointToRay fallback on desktop mouse click
-                Ray clickRay = GetCurrentPointerRay();
-                if (Physics.Raycast(clickRay, out RaycastHit directHit, maxRayDistance, interactionLayers))
+                if (hoveredButton != null)
                 {
-                    var directBtn = directHit.collider.GetComponentInParent<SpatialButton3D>();
-                    if (directBtn != null)
+                    pressedButton = hoveredButton;
+                    pressedButton.OnPointerDown();
+                    TriggerHaptic(0.65f, 0.04f);
+                }
+                else if (CurrentHitObject != null && (CurrentHitObject.name.Contains("Camera_Viewfinder") || CurrentHitObject.name.Contains("CameraApp_LiveScreen")))
+                {
+                    var mediaApp = CurrentHitObject.GetComponentInParent<OmniOS.Apps.MediaHub.OmniAppMediaHub>();
+                    if (mediaApp != null)
                     {
-                        directBtn.TriggerClick();
-                        TriggerHaptic(0.65f, 0.04f);
+                        mediaApp.SwitchCameraFeed();
+                        TriggerHaptic(0.5f, 0.03f);
                     }
-                    else if (directHit.collider.name.Contains("Camera_Viewfinder") || directHit.collider.name.Contains("CameraApp_LiveScreen"))
+                    var camApp = CurrentHitObject.GetComponentInParent<OmniOS.Apps.CameraApp.OmniAppCamera>();
+                    if (camApp != null)
                     {
-                        // Direct click/tap on camera screen flips front/rear camera feeds
-                        var mediaApp = directHit.collider.GetComponentInParent<OmniOS.Apps.MediaHub.OmniAppMediaHub>();
-                        if (mediaApp != null)
+                        camApp.ToggleDeviceWebcam();
+                        TriggerHaptic(0.5f, 0.03f);
+                    }
+                }
+                else if (!isUsingVR)
+                {
+                    // Direct ScreenPointToRay fallback on desktop mouse click
+                    Ray clickRay = GetCurrentPointerRay();
+                    if (Physics.Raycast(clickRay, out RaycastHit directHit, maxRayDistance, interactionLayers))
+                    {
+                        var directBtn = directHit.collider.GetComponentInParent<SpatialButton3D>();
+                        if (directBtn != null)
                         {
-                            mediaApp.SwitchCameraFeed();
-                            TriggerHaptic(0.5f, 0.03f);
+                            directBtn.TriggerClick();
+                            TriggerHaptic(0.65f, 0.04f);
+                        }
+                        else if (directHit.collider.name.Contains("Camera_Viewfinder") || directHit.collider.name.Contains("CameraApp_LiveScreen"))
+                        {
+                            var mediaApp = directHit.collider.GetComponentInParent<OmniOS.Apps.MediaHub.OmniAppMediaHub>();
+                            if (mediaApp != null)
+                            {
+                                mediaApp.SwitchCameraFeed();
+                                TriggerHaptic(0.5f, 0.03f);
+                            }
+                            var camApp = directHit.collider.GetComponentInParent<OmniOS.Apps.CameraApp.OmniAppCamera>();
+                            if (camApp != null)
+                            {
+                                camApp.ToggleDeviceWebcam();
+                                TriggerHaptic(0.5f, 0.03f);
+                            }
                         }
                     }
                 }
@@ -621,6 +656,11 @@ namespace OmniOS.Interaction
             {
                 grabbedWindowTransform = null;
             }
+        }
+
+        private void OnDestroy()
+        {
+            if (instance == this) instance = null;
         }
 
         public void TriggerHaptic(float amplitude, float duration)

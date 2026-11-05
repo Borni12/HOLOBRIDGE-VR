@@ -32,9 +32,19 @@ namespace OmniOS.Core
     public class OmniOSManager : MonoBehaviour
     {
         private static OmniOSManager instance;
-        public static OmniOSManager Instance => instance;
+        public static OmniOSManager Instance
+        {
+            get
+            {
+                if (instance == null || !instance)
+                {
+                    instance = UnityEngine.Object.FindAnyObjectByType<OmniOSManager>();
+                }
+                return instance;
+            }
+        }
 
-        public static bool Show2DOverlay = false; // Default: Clean view without screen-blocking overlays
+        public static bool Show2DOverlay = true; // Enabled by default as requested by user
 
         [Header("System References")]
         [SerializeField] private Transform userHead;
@@ -73,7 +83,7 @@ namespace OmniOS.Core
 
         private void Awake()
         {
-            if (instance != null && instance != this)
+            if (instance != null && instance != this && instance.gameObject != null)
             {
                 Destroy(gameObject);
                 return;
@@ -86,7 +96,26 @@ namespace OmniOS.Core
                 if (cam != null) userHead = cam.transform;
             }
 
+            // Polish: Deduplicate AudioListeners to keep console 100% clean
+            var listeners = UnityEngine.Object.FindObjectsByType<AudioListener>();
+            if (listeners.Length > 1)
+            {
+                Camera mCam = Camera.main;
+                for (int i = 0; i < listeners.Length; i++)
+                {
+                    if (listeners[i] != null && mCam != null && listeners[i].gameObject != mCam.gameObject)
+                    {
+                        listeners[i].enabled = false;
+                    }
+                }
+            }
+
             InitializeCoreSubsystems();
+        }
+
+        private void OnDestroy()
+        {
+            if (instance == this) instance = null;
         }
 
         private void Start()
@@ -324,6 +353,13 @@ namespace OmniOS.Core
 
         public SpatialWindow CreateWindow(string appId, string title, Vector3 position, Quaternion rotation)
         {
+            if (registeredApps.TryGetValue(appId, out var existingWin) && existingWin != null)
+            {
+                existingWin.transform.position = position;
+                existingWin.transform.rotation = rotation;
+                return existingWin;
+            }
+
             if (windowsRoot == null)
             {
                 var wr = GameObject.Find("OmniOS_Windows_Root");
@@ -334,6 +370,20 @@ namespace OmniOS.Core
                     windowsRoot = rootObj.transform;
                 }
             }
+
+            var existingChild = windowsRoot.Find($"Window_{appId}");
+            if (existingChild != null)
+            {
+                var existingWinComp = existingChild.GetComponent<SpatialWindow>();
+                if (existingWinComp != null)
+                {
+                    registeredApps[appId] = existingWinComp;
+                    existingWinComp.transform.position = position;
+                    existingWinComp.transform.rotation = rotation;
+                    return existingWinComp;
+                }
+            }
+
             GameObject winObj = new GameObject($"Window_{appId}");
             winObj.transform.SetParent(windowsRoot, false);
             winObj.transform.position = position;

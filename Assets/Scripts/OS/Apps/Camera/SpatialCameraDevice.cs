@@ -59,7 +59,55 @@ namespace OmniOS.Apps.CameraApp
             set
             {
                 showGrid = value;
-                if (viewfinderMaterial != null) viewfinderMaterial.SetFloat("_ShowGrid", showGrid ? 1f : 0f);
+                if (viewfinderMaterial != null && viewfinderMaterial.HasProperty("_ShowGrid")) viewfinderMaterial.SetFloat("_ShowGrid", showGrid ? 1f : 0f);
+            }
+        }
+
+        // Hierarchy & Rig
+        private Transform cameraRig;
+        public Transform CameraRig
+        {
+            get
+            {
+                if (cameraRig == null) EnsureCameraRig();
+                return cameraRig;
+            }
+        }
+
+        private void EnsureCameraRig()
+        {
+            if (cameraRig != null) return;
+
+            // If attached to [OMNIOS_CORE], create a separate 6-DoF rig so moving the camera doesn't move the entire OS!
+            if (gameObject.name.Contains("[OMNIOS_CORE]") || GetComponent<OmniOSManager>() != null)
+            {
+                var existing = GameObject.Find("OmniOS_SpatialCamera_Rig");
+                if (existing != null)
+                {
+                    cameraRig = existing.transform;
+                }
+                else
+                {
+                    GameObject rigObj = new GameObject("OmniOS_SpatialCamera_Rig");
+                    cameraRig = rigObj.transform;
+
+                    Camera mainCam = Camera.main ?? UnityEngine.Object.FindAnyObjectByType<Camera>();
+                    if (mainCam != null)
+                    {
+                        Transform camT = mainCam.transform;
+                        cameraRig.position = camT.position + camT.forward * 0.85f + camT.right * 0.35f + Vector3.down * 0.1f;
+                        cameraRig.rotation = Quaternion.LookRotation(camT.forward, Vector3.up);
+                    }
+                    else
+                    {
+                        cameraRig.position = new Vector3(0.35f, 1.45f, 0.85f);
+                        cameraRig.rotation = Quaternion.identity;
+                    }
+                }
+            }
+            else
+            {
+                cameraRig = transform;
             }
         }
 
@@ -68,17 +116,20 @@ namespace OmniOS.Apps.CameraApp
 
         private void Awake()
         {
+            EnsureCameraRig();
             SetupCaptureCamera();
             BuildPhysicalBody();
         }
 
         private void SetupCaptureCamera()
         {
+            EnsureCameraRig();
+
             if (captureCamera == null)
             {
                 GameObject camObj = new GameObject("SpatialCamera_Lens");
                 camObj.tag = "Untagged"; // Strictly Untagged: Never hijack MainCamera
-                camObj.transform.SetParent(transform, false);
+                camObj.transform.SetParent(cameraRig, false);
                 camObj.transform.localPosition = new Vector3(0, 0, 0.12f);
                 camObj.transform.localRotation = Quaternion.identity;
 
@@ -88,31 +139,40 @@ namespace OmniOS.Apps.CameraApp
                 captureCamera.fieldOfView = fieldOfView;
                 captureCamera.nearClipPlane = 0.05f;
                 captureCamera.farClipPlane = 500f;
+                captureCamera.cullingMask = ~0; // Render all layers
 
                 // URP Camera Data
                 var urpCam = camObj.AddComponent<UniversalAdditionalCameraData>();
+                urpCam.renderType = CameraRenderType.Base; // Required for URP RenderTexture output
                 urpCam.renderPostProcessing = true;
             }
 
-            cameraRenderTexture = new RenderTexture(resolutionWidth, resolutionHeight, 24, RenderTextureFormat.ARGB32);
-            cameraRenderTexture.name = "OmniOS_SpatialCamera_RT";
-            cameraRenderTexture.wrapMode = TextureWrapMode.Clamp;
-            cameraRenderTexture.filterMode = FilterMode.Bilinear;
-            cameraRenderTexture.Create();
+            if (cameraRenderTexture == null)
+            {
+                cameraRenderTexture = new RenderTexture(resolutionWidth, resolutionHeight, 24, RenderTextureFormat.ARGB32);
+                cameraRenderTexture.name = "OmniOS_SpatialCamera_RT";
+                cameraRenderTexture.wrapMode = TextureWrapMode.Clamp;
+                cameraRenderTexture.filterMode = FilterMode.Bilinear;
+                cameraRenderTexture.Create();
+            }
 
             captureCamera.targetTexture = cameraRenderTexture;
+            captureCamera.enabled = true;
         }
 
         private void BuildPhysicalBody()
         {
+            EnsureCameraRig();
+
             // 1. Camera Body (Aluminum & Black Leatherette)
             GameObject body = GameObject.CreatePrimitive(PrimitiveType.Cube);
             body.name = "Camera_Body";
-            body.transform.SetParent(transform, false);
+            body.transform.SetParent(cameraRig, false);
             body.transform.localScale = new Vector3(0.24f, 0.15f, 0.08f);
 
             var bodyMat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
             bodyMat.color = new Color(0.12f, 0.13f, 0.16f);
+            if (bodyMat.HasProperty("_BaseColor")) bodyMat.SetColor("_BaseColor", new Color(0.12f, 0.13f, 0.16f));
             body.GetComponent<Renderer>().material = bodyMat;
 
             // BoxCollider for grabbing
@@ -122,7 +182,7 @@ namespace OmniOS.Apps.CameraApp
             // 2. Lens Barrel (Cylinder on front)
             GameObject lensObj = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             lensObj.name = "Camera_LensBarrel";
-            lensObj.transform.SetParent(transform, false);
+            lensObj.transform.SetParent(cameraRig, false);
             lensObj.transform.localScale = new Vector3(0.09f, 0.045f, 0.09f);
             lensObj.transform.localRotation = Quaternion.Euler(90f, 0, 0);
             lensObj.transform.localPosition = new Vector3(0, 0, 0.06f);
@@ -130,12 +190,13 @@ namespace OmniOS.Apps.CameraApp
 
             var lensMat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
             lensMat.color = new Color(0.25f, 0.28f, 0.32f);
+            if (lensMat.HasProperty("_BaseColor")) lensMat.SetColor("_BaseColor", new Color(0.25f, 0.28f, 0.32f));
             lensObj.GetComponent<Renderer>().material = lensMat;
 
             // 3. Viewfinder Screen (Quad on back)
             GameObject screenObj = GameObject.CreatePrimitive(PrimitiveType.Quad);
             screenObj.name = "Camera_ViewfinderScreen";
-            screenObj.transform.SetParent(transform, false);
+            screenObj.transform.SetParent(cameraRig, false);
             screenObj.transform.localScale = new Vector3(0.20f, 0.115f, 1f);
             screenObj.transform.localRotation = Quaternion.Euler(0, 180f, 0); // Faces rear
             screenObj.transform.localPosition = new Vector3(0, 0, -0.041f);
@@ -145,14 +206,20 @@ namespace OmniOS.Apps.CameraApp
             if (vfShader == null) vfShader = Shader.Find("Universal Render Pipeline/Unlit");
 
             viewfinderMaterial = new Material(vfShader);
-            viewfinderMaterial.SetTexture("_MainTex", cameraRenderTexture);
-            viewfinderMaterial.SetFloat("_ShowGrid", showGrid ? 1f : 0f);
-            viewfinderMaterial.SetFloat("_ShowReticle", showReticle ? 1f : 0f);
+            // Set viewfinder texture using all known URP/Legacy property names for maximum compatibility
+            viewfinderMaterial.mainTexture = cameraRenderTexture;
+            if (viewfinderMaterial.HasProperty("_BaseMap")) viewfinderMaterial.SetTexture("_BaseMap", cameraRenderTexture);
+            if (viewfinderMaterial.HasProperty("_MainTex")) viewfinderMaterial.SetTexture("_MainTex", cameraRenderTexture);
+            if (viewfinderMaterial.HasProperty("_BaseColor")) viewfinderMaterial.SetColor("_BaseColor", Color.white);
+            if (viewfinderMaterial.HasProperty("_Color")) viewfinderMaterial.SetColor("_Color", Color.white);
+            // Guard custom shader properties — URP/Unlit does not have these; avoids silent no-op / warnings
+            if (viewfinderMaterial.HasProperty("_ShowGrid")) viewfinderMaterial.SetFloat("_ShowGrid", showGrid ? 1f : 0f);
+            if (viewfinderMaterial.HasProperty("_ShowReticle")) viewfinderMaterial.SetFloat("_ShowReticle", showReticle ? 1f : 0f);
             screenObj.GetComponent<Renderer>().material = viewfinderMaterial;
 
             // 4. Xenon Flash Light
             GameObject flashObj = new GameObject("Camera_FlashLight");
-            flashObj.transform.SetParent(transform, false);
+            flashObj.transform.SetParent(cameraRig, false);
             flashObj.transform.localPosition = new Vector3(0.08f, 0.05f, 0.05f);
             flashLight = flashObj.AddComponent<Light>();
             flashLight.type = LightType.Point;
@@ -183,7 +250,7 @@ namespace OmniOS.Apps.CameraApp
             // Trigger Flash and Audio Cue
             flashIntensity = 6.0f;
             if (flashLight != null) flashLight.intensity = flashIntensity;
-            SpatialTheme.PlaySpatialTone(transform.position, 1600f, 0.04f);
+            SpatialTheme.PlaySpatialTone(CameraRig.position, 1600f, 0.04f);
 
             // Readback Texture
             RenderTexture prevActive = RenderTexture.active;
@@ -231,6 +298,13 @@ namespace OmniOS.Apps.CameraApp
         public void SetZoom(float normalizedZoom) // 0 (Wide) to 1 (Telephoto)
         {
             fieldOfView = Mathf.Lerp(75f, 25f, Mathf.Clamp01(normalizedZoom));
+        }
+
+        public void SummonTo(Vector3 position, Quaternion rotation)
+        {
+            EnsureCameraRig();
+            cameraRig.position = position;
+            cameraRig.rotation = rotation;
         }
 
         private void OnDestroy()

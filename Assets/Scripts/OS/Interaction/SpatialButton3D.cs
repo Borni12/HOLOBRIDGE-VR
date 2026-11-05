@@ -140,8 +140,13 @@ namespace OmniOS.Interaction
             isPressed = false;
         }
 
+        private int lastClickFrame = -1;
+
         public void TriggerClick()
         {
+            if (Time.frameCount == lastClickFrame) return; // Debounce multiple invocations in same frame
+            lastClickFrame = Time.frameCount;
+
             SpatialAudioEngine.Instance?.PlayButtonClick();
             onClick?.Invoke();
         }

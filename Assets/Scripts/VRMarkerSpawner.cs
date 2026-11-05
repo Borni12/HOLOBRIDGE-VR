@@ -144,7 +144,7 @@ public class VRMarkerSpawner : NetworkBehaviour
             Destroy(testRoot);
         }
 
-        var blueGlows = UnityEngine.Object.FindObjectsByType<AegisSpatial.Comfort.AdaptiveRestFrame>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        var blueGlows = UnityEngine.Object.FindObjectsByType<AegisSpatial.Comfort.AdaptiveRestFrame>(FindObjectsInactive.Include);
         foreach (var bg in blueGlows)
         {
             Destroy(bg.gameObject);

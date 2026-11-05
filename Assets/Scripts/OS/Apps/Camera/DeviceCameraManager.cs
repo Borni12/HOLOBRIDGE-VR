@@ -12,7 +12,17 @@ namespace OmniOS.Apps.CameraApp
     public class DeviceCameraManager : MonoBehaviour
     {
         private static DeviceCameraManager instance;
-        public static DeviceCameraManager Instance => instance;
+        public static DeviceCameraManager Instance
+        {
+            get
+            {
+                if (instance == null || !instance)
+                {
+                    instance = UnityEngine.Object.FindAnyObjectByType<DeviceCameraManager>();
+                }
+                return instance;
+            }
+        }
 
         [Header("Hardware Configuration")]
         [SerializeField] private int requestedWidth = 1920;
@@ -35,7 +45,7 @@ namespace OmniOS.Apps.CameraApp
 
         private void Awake()
         {
-            if (instance != null && instance != this)
+            if (instance != null && instance != this && instance.gameObject != null)
             {
                 Destroy(gameObject);
                 return;
@@ -72,13 +82,21 @@ namespace OmniOS.Apps.CameraApp
                 activeWebCamTexture.Stop();
             }
 
-            string deviceName = availableDevices[currentDeviceIndex].name;
-            activeWebCamTexture = new WebCamTexture(deviceName, requestedWidth, requestedHeight, requestedFPS);
-            activeWebCamTexture.Play();
-            isStreaming = true;
+            try
+            {
+                string deviceName = availableDevices[currentDeviceIndex].name;
+                activeWebCamTexture = new WebCamTexture(deviceName, requestedWidth, requestedHeight, requestedFPS);
+                activeWebCamTexture.Play();
+                isStreaming = true;
 
-            Debug.Log($"<color=cyan>[DeviceCamera]</color> Started streaming from: {deviceName}");
-            OnCameraFeedStarted?.Invoke(activeWebCamTexture);
+                Debug.Log($"<color=cyan>[DeviceCamera]</color> Started streaming from: {deviceName}");
+                OnCameraFeedStarted?.Invoke(activeWebCamTexture);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[DeviceCamera] Could not start streaming: {ex.Message}");
+                isStreaming = false;
+            }
         }
 
         public void StopStreaming()
@@ -104,7 +122,7 @@ namespace OmniOS.Apps.CameraApp
 
         public Texture2D CaptureWebcamSnapshot()
         {
-            if (!IsStreaming) return null;
+            if (!IsStreaming || activeWebCamTexture == null || activeWebCamTexture.width <= 16) return null;
 
             Texture2D snapshot = new Texture2D(activeWebCamTexture.width, activeWebCamTexture.height, TextureFormat.RGB24, false);
             snapshot.SetPixels(activeWebCamTexture.GetPixels());
@@ -114,6 +132,7 @@ namespace OmniOS.Apps.CameraApp
 
         private void OnDestroy()
         {
+            if (instance == this) instance = null;
             StopStreaming();
             if (activeWebCamTexture != null)
             {

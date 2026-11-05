@@ -55,8 +55,11 @@ namespace OmniOS.Apps.CameraApp
             screenQuad.transform.localScale = new Vector3(1.30f, 0.72f, 1f);
             screenQuad.transform.localPosition = new Vector3(0, 0.08f, -0.01f);
 
-            var colliders = screenQuad.GetComponents<Collider>();
-            foreach (var c in colliders) Destroy(c);
+            // Add BoxCollider so direct mouse / laser clicks toggle camera feed
+            var col = screenQuad.GetComponent<BoxCollider>();
+            if (col == null) col = screenQuad.AddComponent<BoxCollider>();
+            col.size = new Vector3(1f, 1f, 0.06f);
+            col.center = new Vector3(0, 0, -0.01f);
 
             Shader vfShader = Shader.Find("OmniOS/CameraViewfinder");
             if (vfShader == null) vfShader = Shader.Find("Universal Render Pipeline/Unlit");
@@ -112,17 +115,26 @@ namespace OmniOS.Apps.CameraApp
 
         public void ToggleDeviceWebcam()
         {
-            useDeviceWebcam = !useDeviceWebcam;
             if (deviceCamManager == null) deviceCamManager = DeviceCameraManager.Instance ?? UnityEngine.Object.FindAnyObjectByType<DeviceCameraManager>();
 
-            if (useDeviceWebcam)
+            if (!useDeviceWebcam)
             {
-                deviceCamManager?.StartStreaming();
-                if (webcamToggleBtn != null) webcamToggleBtn.ButtonText = "📷 3D VR Lens";
-                OmniOSManager.Instance?.ShowNotificationToast($"📹 Switched to Device Webcam: {deviceCamManager?.CurrentDeviceName}");
+                if (deviceCamManager != null && deviceCamManager.IsDeviceCameraAvailable)
+                {
+                    useDeviceWebcam = true;
+                    deviceCamManager.StartStreaming();
+                    if (webcamToggleBtn != null) webcamToggleBtn.ButtonText = "📷 3D VR Lens";
+                    OmniOSManager.Instance?.ShowNotificationToast($"📹 Switched to Device Webcam: {deviceCamManager.CurrentDeviceName}");
+                }
+                else
+                {
+                    OmniOSManager.Instance?.ShowNotificationToast("⚠️ No physical webcam detected. Using 3D Virtual Lens.");
+                    useDeviceWebcam = false;
+                }
             }
             else
             {
+                useDeviceWebcam = false;
                 deviceCamManager?.StopStreaming();
                 if (webcamToggleBtn != null) webcamToggleBtn.ButtonText = "📹 Use Webcam";
                 OmniOSManager.Instance?.ShowNotificationToast("📷 Switched to 3D Virtual Camera");
@@ -152,6 +164,12 @@ namespace OmniOS.Apps.CameraApp
                 if (screenMaterial.HasProperty("_MainTex")) screenMaterial.SetTexture("_MainTex", activeTex);
                 if (screenMaterial.HasProperty("_BaseMap")) screenMaterial.SetTexture("_BaseMap", activeTex);
                 if (screenMaterial.HasProperty("_BaseColor")) screenMaterial.SetColor("_BaseColor", Color.white);
+            }
+            else
+            {
+                // No live feed yet — show a dark placeholder so screen doesn't stay magenta
+                if (screenMaterial.HasProperty("_BaseColor")) screenMaterial.SetColor("_BaseColor", new Color(0.04f, 0.06f, 0.10f, 1f));
+                if (screenMaterial.HasProperty("_BaseMap")) screenMaterial.SetTexture("_BaseMap", null);
             }
         }
 
@@ -187,8 +205,9 @@ namespace OmniOS.Apps.CameraApp
             if (cameraDevice != null && Camera.main != null)
             {
                 Transform camTrans = Camera.main.transform;
-                cameraDevice.transform.position = camTrans.position + camTrans.forward * 0.45f + camTrans.right * 0.2f + Vector3.down * 0.1f;
-                cameraDevice.transform.rotation = camTrans.rotation;
+                Vector3 targetPos = camTrans.position + camTrans.forward * 0.45f + camTrans.right * 0.2f + Vector3.down * 0.1f;
+                Quaternion targetRot = camTrans.rotation;
+                cameraDevice.SummonTo(targetPos, targetRot);
                 SpatialAudioEngine.Instance?.PlayButtonClick();
                 OmniOSManager.Instance?.ShowNotificationToast("📷 Camera Device summoned to hand!");
             }

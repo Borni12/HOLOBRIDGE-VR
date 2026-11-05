@@ -56,7 +56,7 @@ namespace OmniOS.Core
             dockBackplate = GameObject.CreatePrimitive(PrimitiveType.Quad);
             dockBackplate.name = "Dock_GlassBackplate";
             dockBackplate.transform.SetParent(transform, false);
-            dockBackplate.transform.localScale = new Vector3(1.72f, 0.19f, 1f);
+            dockBackplate.transform.localScale = new Vector3(2.05f, 0.19f, 1f);
             dockBackplate.transform.localPosition = Vector3.zero;
 
             // Remove any colliders on backplate to prevent raycast obstruction of buttons
@@ -81,6 +81,9 @@ namespace OmniOS.Core
 
             DockBtnDef[] defs = new DockBtnDef[]
             {
+                new DockBtnDef("🔄 Reload", () => osManager?.FullSystemReload(), new Color(0.0f, 1.0f, 0.9f)),
+                new DockBtnDef("📱 Android", () => osManager?.ToggleApp("media_hub"), new Color(0.2f, 0.95f, 0.55f)),
+                new DockBtnDef(" Apps", () => OmniAppLauncherBox.Instance?.ToggleLaunchpad(), new Color(1.0f, 0.75f, 0.15f)),
                 new DockBtnDef("🔮 Peel", () => OmniGenesis.Core.OmniGenesis5DExperience.Instance?.TriggerRealityPeel(), new Color(0.0f, 0.95f, 1.0f)),
                 new DockBtnDef("⚛️ Matter", () => {
                     var exp = OmniGenesis.Core.OmniGenesis5DExperience.Instance;
@@ -92,9 +95,8 @@ namespace OmniOS.Core
                 }, new Color(1.0f, 0.55f, 0.15f)),
                 new DockBtnDef("⏳ Orbs", () => OmniGenesis.Core.OmniGenesis5DExperience.Instance?.ToggleMultiverseOrbs(), new Color(0.85f, 0.45f, 1.0f)),
                 new DockBtnDef("🤝 Handoff", () => OmniGenesis.Core.OmniGenesis5DExperience.Instance?.TriggerHandoff(), new Color(0.2f, 0.95f, 0.55f)),
-                new DockBtnDef("🎬 Media", () => osManager?.ToggleApp("media_hub"), new Color(1.0f, 0.25f, 0.25f)),
-                new DockBtnDef("🌌 Scene", () => osManager?.ToggleApp("scenery"), new Color(0.35f, 0.85f, 1.0f)),
                 new DockBtnDef("📷 Cam", () => osManager?.ToggleApp("camera"), new Color(0.25f, 0.95f, 0.55f)),
+                new DockBtnDef("🌌 Scene", () => osManager?.ToggleApp("scenery"), new Color(0.35f, 0.85f, 1.0f)),
                 new DockBtnDef("🖼️ Photos", () => osManager?.ToggleApp("gallery"), new Color(0.45f, 0.65f, 1.0f)),
                 new DockBtnDef("🎨 Theme", () => {
                     var env = UnityEngine.Object.FindAnyObjectByType<MetaverseEnvironmentManager>();
@@ -152,8 +154,8 @@ namespace OmniOS.Core
                 }
             }
 
-            // Keyboard shortcut 'M' toggles dock visibility
-            if (Input.GetKeyDown(KeyCode.M))
+            // Keyboard shortcut 'D' or 'F2' toggles dock visibility (avoiding conflict with 'M')
+            if (Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.F2))
             {
                 ToggleVisibility();
             }
