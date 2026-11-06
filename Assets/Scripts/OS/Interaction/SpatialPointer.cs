@@ -71,6 +71,7 @@ namespace OmniOS.Interaction
         private float lastMouseActivityTime = 1f;
         private float lastVRActivityTime = -10f;
         private bool isUsingVR = false;
+        private bool wasLookingLastFrame = false;
 
         private static SpatialPointer instance;
         public static SpatialPointer Instance
@@ -176,7 +177,7 @@ namespace OmniOS.Interaction
             }
             if (!enableDesktopControls || headCameraTransform == null) return;
 
-            // Right-click drag to look around the Metaverse room
+            // 1. Right-click drag to look around the Metaverse room freely (360 degrees)
             bool isLooking = false;
             try { isLooking = Input.GetMouseButton(1); } catch { }
             try
@@ -187,28 +188,45 @@ namespace OmniOS.Interaction
 
             if (isLooking)
             {
+                if (!wasLookingLastFrame)
+                {
+                    Vector3 euler = headCameraTransform.eulerAngles;
+                    cameraYaw = euler.y;
+                    cameraPitch = euler.x > 180f ? (euler.x - 360f) : euler.x;
+                }
+
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;
 
                 float mouseX = 0f;
                 float mouseY = 0f;
+
+                // Priority 1: New Input System mouse.delta (Unity 6 high-precision native)
                 try
                 {
-                    mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
-                    mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
-                } catch {
                     var mouse = UnityEngine.InputSystem.Mouse.current;
                     if (mouse != null)
                     {
                         Vector2 d = mouse.delta.ReadValue();
-                        mouseX = d.x * 0.1f * mouseSensitivity;
-                        mouseY = d.y * 0.1f * mouseSensitivity;
+                        mouseX = d.x * 0.12f * mouseSensitivity;
+                        mouseY = d.y * 0.12f * mouseSensitivity;
                     }
+                }
+                catch { }
+
+                // Priority 2: Legacy Input.GetAxis fallback
+                if (Mathf.Abs(mouseX) < 0.001f && Mathf.Abs(mouseY) < 0.001f)
+                {
+                    try
+                    {
+                        mouseX = Input.GetAxis("Mouse X") * mouseSensitivity * 1.5f;
+                        mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity * 1.5f;
+                    }
+                    catch { }
                 }
 
                 cameraYaw += mouseX;
                 cameraPitch = Mathf.Clamp(cameraPitch - mouseY, -85f, 85f);
-
                 headCameraTransform.rotation = Quaternion.Euler(cameraPitch, cameraYaw, 0f);
             }
             else
@@ -219,14 +237,25 @@ namespace OmniOS.Interaction
                     Cursor.visible = true;
                 }
             }
+            wasLookingLastFrame = isLooking;
 
-            // WASD and Arrow keys movement around the Metaverse lounge
+            // If user is actively typing in the Android tablet search bar, suspend WASD walk locomotion so keystrokes type text
+            if (OmniOS.Apps.MediaHub.OmniAppMediaHub.IsTypingActive) return;
+
+            // 2. WASD and Arrow keys movement around the Metaverse lounge
             float moveX = 0f;
             float moveZ = 0f;
+
             try
             {
-                moveX = Input.GetAxis("Horizontal");
-                moveZ = Input.GetAxis("Vertical");
+                var kb = UnityEngine.InputSystem.Keyboard.current;
+                if (kb != null)
+                {
+                    if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) moveX -= 1f;
+                    if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) moveX += 1f;
+                    if (kb.wKey.isPressed || kb.upArrowKey.isPressed) moveZ += 1f;
+                    if (kb.sKey.isPressed || kb.downArrowKey.isPressed) moveZ -= 1f;
+                }
             } catch { }
 
             if (Mathf.Abs(moveX) < 0.01f)
@@ -240,6 +269,18 @@ namespace OmniOS.Interaction
                 else if (Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.W)) moveZ = 1f;
             }
 
+            float currentSpeed = moveSpeed * (Input.GetKey(KeyCode.LeftShift) ? 1.75f : 1.0f);
+
+            // Vertical flight: E / Space = Up, Q / C = Down
+            if (Input.GetKey(KeyCode.E) || (Input.GetKey(KeyCode.Space) && !isLooking))
+            {
+                headCameraTransform.position += Vector3.up * (currentSpeed * Time.deltaTime);
+            }
+            if (Input.GetKey(KeyCode.Q) || Input.GetKey(KeyCode.C))
+            {
+                headCameraTransform.position += Vector3.down * (currentSpeed * Time.deltaTime);
+            }
+
             if (Mathf.Abs(moveX) > 0.01f || Mathf.Abs(moveZ) > 0.01f)
             {
                 Vector3 fwd = headCameraTransform.forward;
@@ -250,7 +291,7 @@ namespace OmniOS.Interaction
                 right.y = 0;
                 right.Normalize();
 
-                Vector3 delta = (fwd * moveZ + right * moveX) * (moveSpeed * Time.deltaTime);
+                Vector3 delta = (fwd * moveZ + right * moveX) * (currentSpeed * Time.deltaTime);
                 headCameraTransform.position += delta;
             }
         }

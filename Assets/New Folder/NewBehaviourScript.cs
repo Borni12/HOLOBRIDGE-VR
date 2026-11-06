@@ -22,6 +22,9 @@ public class NewBehaviourScript : MonoBehaviour
 
     void Update()
     {
+        // Yield to SpatialPointer desktop navigation to avoid camera rotation fight
+        if (OmniOS.Interaction.SpatialPointer.Instance != null) return;
+
         // Right-Click mouse look
         Vector3 currentMousePos = Input.mousePosition;
 

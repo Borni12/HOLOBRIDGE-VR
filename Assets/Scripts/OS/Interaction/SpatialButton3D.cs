@@ -69,7 +69,8 @@ namespace OmniOS.Interaction
             visualBackplate.transform.SetParent(transform, false);
             visualBackplate.transform.localScale = new Vector3(buttonSize.x, buttonSize.y, 1f);
             visualBackplate.transform.localPosition = Vector3.zero;
-            Destroy(visualBackplate.GetComponent<Collider>());
+            var mc = visualBackplate.GetComponent<Collider>();
+            if (mc != null) DestroyImmediate(mc);
 
             buttonMaterial = SpatialTheme.CreateGlassMaterial(baseColor, hoverColor);
             visualBackplate.GetComponent<Renderer>().material = buttonMaterial;
@@ -130,8 +131,6 @@ namespace OmniOS.Interaction
 
         public void OnPointerDown()
         {
-            if (isPressed) return;
-            isPressed = true;
             TriggerClick();
         }
 
@@ -147,8 +146,17 @@ namespace OmniOS.Interaction
             if (Time.frameCount == lastClickFrame) return; // Debounce multiple invocations in same frame
             lastClickFrame = Time.frameCount;
 
+            isPressed = true;
+            CancelInvoke(nameof(ResetPressedState));
+            Invoke(nameof(ResetPressedState), 0.12f);
+
             SpatialAudioEngine.Instance?.PlayButtonClick();
             onClick?.Invoke();
+        }
+
+        private void ResetPressedState()
+        {
+            isPressed = false;
         }
 
         public void SetSize(float width, float height)

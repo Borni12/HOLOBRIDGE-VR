@@ -110,6 +110,13 @@ namespace OmniOS.Apps.MediaHub
         private TextMesh cameraLensBadgeText;
         private float currentCamFOV = 60f;
 
+        // Interactive Keyboard Typing & Web Search Suite
+        public static bool IsTypingActive { get; set; } = false;
+        private bool isSearchTyping = false;
+        private string searchInputBuffer = "https://www.google.com";
+        private SpatialButton3D addressBarBtn;
+        private float cursorBlinkTimer = 0f;
+
         // Cached SpatialPointer reference — avoids expensive FindAnyObjectByType every frame
         private OmniOS.Interaction.SpatialPointer cachedSpatialPointer;
         private bool spatialPointerSearched = false;
@@ -169,10 +176,13 @@ namespace OmniOS.Apps.MediaHub
                 if (homeDateText != null) homeDateText.text = $"{DateTime.Now:dddd, MMM d, yyyy} • 24°C Sunny • 🟢 5G Online";
             }
 
-            // 2. Direct desktop mouse click fail-safe for Standalone .exe / Mac / Linux
+            // 2. Interactive Keyboard Typing & Web Search Handler
+            HandleKeyboardTypingAndShortcuts();
+
+            // 3. Direct desktop mouse click dispatcher (Guaranteed 100% responsiveness)
             HandleDesktopDirectInput();
 
-            // 3. Live Camera Viewfinder feed update
+            // 4. Live Camera Viewfinder feed update
             if (currentTab == HubTab.CameraPro)
             {
                 UpdateCameraProFeed();
@@ -198,20 +208,10 @@ namespace OmniOS.Apps.MediaHub
             }
         }
 
-        #region Desktop Direct Mouse Click Fail-Safe
+        #region Desktop Direct Mouse Click & Keyboard Typing Suite
 
         private void HandleDesktopDirectInput()
         {
-            // If SpatialPointer is active in scene, let it dispatch clicks to prevent double-click invocation
-            // Cache the lookup result to avoid expensive FindAnyObjectByType every frame
-            if (!spatialPointerSearched)
-            {
-                cachedSpatialPointer = UnityEngine.Object.FindAnyObjectByType<OmniOS.Interaction.SpatialPointer>();
-                spatialPointerSearched = true;
-            }
-            if (cachedSpatialPointer != null) return;
-
-            // Direct fallback only when SpatialPointer is absent
             bool mouseClicked = false;
             Vector3 mousePos = Vector3.zero;
 
@@ -246,15 +246,195 @@ namespace OmniOS.Apps.MediaHub
                 if (cam != null)
                 {
                     Ray ray = cam.ScreenPointToRay(mousePos);
-                    if (Physics.Raycast(ray, out RaycastHit hit, 15.0f, ~0))
+                    if (Physics.Raycast(ray, out RaycastHit hit, 30.0f, ~0))
                     {
                         var btn = hit.collider.GetComponentInParent<SpatialButton3D>();
                         if (btn != null && btn.transform.IsChildOf(transform))
                         {
                             btn.TriggerClick();
                         }
+                        else if (hit.collider.gameObject.name.Contains("Camera_Viewfinder") || hit.collider.gameObject.name.Contains("CameraApp_LiveScreen"))
+                        {
+                            SwitchCameraFeed();
+                        }
+                        else if (isSearchTyping && !hit.collider.transform.IsChildOf(transform))
+                        {
+                            // Clicked outside tablet while typing -> finish typing
+                            isSearchTyping = false;
+                            IsTypingActive = false;
+                            UpdateAddressBarDisplay();
+                        }
                     }
                 }
+            }
+        }
+
+        private void HandleKeyboardTypingAndShortcuts()
+        {
+            if (isSearchTyping)
+            {
+                cursorBlinkTimer += Time.unscaledDeltaTime;
+                if (cursorBlinkTimer >= 0.35f)
+                {
+                    cursorBlinkTimer = 0f;
+                    UpdateAddressBarDisplay();
+                }
+
+                // 1. Enter / Return: Submit Search / Navigate
+                bool enterPressed = false;
+                try
+                {
+                    var kb = UnityEngine.InputSystem.Keyboard.current;
+                    if (kb != null && (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame)) enterPressed = true;
+                }
+                catch { }
+                if (!enterPressed && (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))) enterPressed = true;
+
+                if (enterPressed)
+                {
+                    isSearchTyping = false;
+                    IsTypingActive = false;
+                    UpdateAddressBarDisplay();
+                    SubmitSearchQuery(searchInputBuffer);
+                    return;
+                }
+
+                // 2. Escape: Cancel typing
+                bool escPressed = false;
+                try
+                {
+                    var kb = UnityEngine.InputSystem.Keyboard.current;
+                    if (kb != null && kb.escapeKey.wasPressedThisFrame) escPressed = true;
+                }
+                catch { }
+                if (!escPressed && Input.GetKeyDown(KeyCode.Escape)) escPressed = true;
+
+                if (escPressed)
+                {
+                    isSearchTyping = false;
+                    IsTypingActive = false;
+                    UpdateAddressBarDisplay();
+                    return;
+                }
+
+                // 3. Backspace: Erase character
+                bool backspacePressed = false;
+                try
+                {
+                    var kb = UnityEngine.InputSystem.Keyboard.current;
+                    if (kb != null && kb.backspaceKey.wasPressedThisFrame) backspacePressed = true;
+                }
+                catch { }
+                if (!backspacePressed && Input.GetKeyDown(KeyCode.Backspace)) backspacePressed = true;
+
+                if (backspacePressed)
+                {
+                    if (searchInputBuffer.Length > 0)
+                    {
+                        searchInputBuffer = searchInputBuffer.Substring(0, searchInputBuffer.Length - 1);
+                        UpdateAddressBarDisplay();
+                    }
+                    return;
+                }
+
+                // 4. Character typing via Input.inputString
+                string chars = Input.inputString;
+                if (!string.IsNullOrEmpty(chars))
+                {
+                    foreach (char c in chars)
+                    {
+                        if (c == '\b' || c == '\n' || c == '\r') continue;
+                        if (!char.IsControl(c) && searchInputBuffer.Length < 140)
+                        {
+                            searchInputBuffer += c;
+                            UpdateAddressBarDisplay();
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Keyboard shortcuts for Android Tablet navigation (active when tablet is open and not typing)
+                if (spatialWindow != null && spatialWindow.IsOpen)
+                {
+                    if (Input.GetKeyDown(KeyCode.Escape) && currentTab != HubTab.HomeScreen)
+                    {
+                        SwitchTab(HubTab.HomeScreen);
+                    }
+                }
+            }
+        }
+
+        public void ActivateSearchInput()
+        {
+            isSearchTyping = true;
+            IsTypingActive = true;
+            if (searchInputBuffer == "https://www.google.com" || searchInputBuffer.StartsWith("https://www.google.com/search"))
+            {
+                searchInputBuffer = "";
+            }
+            UpdateAddressBarDisplay();
+            SpatialAudioEngine.Instance?.PlayButtonClick();
+            OmniOSManager.Instance?.ShowNotificationToast("⌨️ Search Bar Active: Type with keyboard & hit ENTER");
+        }
+
+        public void ClearSearchInput()
+        {
+            searchInputBuffer = "";
+            UpdateAddressBarDisplay();
+            SpatialAudioEngine.Instance?.PlayButtonClick();
+        }
+
+        private void UpdateAddressBarDisplay()
+        {
+            string blink = ((int)(Time.unscaledTime * 3.0f) % 2 == 0) ? "❚" : " ";
+            string disp = isSearchTyping
+                ? $"🔍 {searchInputBuffer}{blink}  [Press ENTER]"
+                : (string.IsNullOrEmpty(searchInputBuffer) ? "🔍 Search web or type URL... [Click to Type]" : $"🔒 {searchInputBuffer}");
+
+            if (addressBarBtn != null) addressBarBtn.ButtonText = disp;
+            if (browserAddressText != null) browserAddressText.text = disp;
+        }
+
+        public void SubmitSearchQuery(string query)
+        {
+            if (string.IsNullOrEmpty(query))
+            {
+                NavigateToUrl("https://www.google.com", "Google Search");
+                return;
+            }
+
+            query = query.Trim();
+            if (query.StartsWith("http://") || query.StartsWith("https://"))
+            {
+                string domain = query.Replace("https://", "").Replace("http://", "").Split('/')[0];
+                NavigateToUrl(query, domain);
+            }
+            else if (query.Contains(".") && !query.Contains(" "))
+            {
+                NavigateToUrl("https://" + query, query);
+            }
+            else
+            {
+                // Web Search
+                string searchUrl = "https://www.google.com/search?q=" + Uri.EscapeDataString(query);
+                currentUrl = searchUrl;
+                searchInputBuffer = query;
+                UpdateAddressBarDisplay();
+
+                if (browserViewportText != null)
+                {
+                    browserViewportText.text =
+                        $"🔍 <b>Google Search Results for: \"{query}\"</b>\n\n" +
+                        $"• <b>Top Match:</b> Official homepage and web portal for <i>{query}</i>\n" +
+                        $"• <b>Knowledge Graph:</b> Overview, release notes, and documentation\n" +
+                        $"• <b>Community & Videos:</b> Watch popular discussions and video reviews\n" +
+                        $"• <b>Interactive Browsing:</b> Instant search indexing completed via 5G\n\n" +
+                        $"👉 <i>Click '🚀 Open Full Web' below to open live search results in full browser!</i>";
+                }
+
+                if (activeWebRoutine != null) StopCoroutine(activeWebRoutine);
+                activeWebRoutine = StartCoroutine(PerformLiveWebRequest("https://www.google.com", $"Google: {query}"));
             }
         }
 
@@ -487,10 +667,10 @@ namespace OmniOS.Apps.MediaHub
                 TextAnchor.MiddleCenter, TextAlignment.Center
             );
 
-            // Google Search Widget (Clickable 3D pill that jumps to Chrome)
-            CreateButton("🔍 Google  |  Search web or type URL...   🎙️", new Vector3(0, 0.11f, -0.025f), new Vector2(1.15f, 0.075f), parent, () => {
+            // Google Search Widget (Clickable 3D pill that jumps to Chrome & focuses keyboard)
+            CreateButton("🔍 Google  |  Click to type search with keyboard...   🎙️", new Vector3(0, 0.11f, -0.025f), new Vector2(1.15f, 0.075f), parent, () => {
                 SwitchTab(HubTab.ChromeBrowser);
-                NavigateToUrl("https://www.google.com", "Google Search");
+                ActivateSearchInput();
             }, new Color(0.20f, 0.60f, 1.0f));
 
             // Material You App Grid (Row 1)
@@ -516,28 +696,30 @@ namespace OmniOS.Apps.MediaHub
         // ==================== 2. GOOGLE CHROME WEB BROWSER ====================
         private void BuildChromeBrowser(Transform parent)
         {
-            // Top URL Address Bar Ribbon
-            CreateQuadPanel("Chrome_Address_Bar_Pill", new Vector3(-0.16f, 0.32f, -0.015f), new Vector2(0.85f, 0.065f), parent, texSearchPill, Color.white);
-
-            browserAddressText = CreateText(
-                "🔒 https://www.google.com",
-                new Vector3(-0.55f, 0.32f, -0.025f),
-                parent, 26, 0.0026f,
-                new Color(0.40f, 1.0f, 0.65f, 1.0f),
-                TextAnchor.MiddleLeft, TextAlignment.Left
+            // Top URL Address Bar (Clickable Input Button: Click to focus & type with keyboard)
+            addressBarBtn = CreateButton(
+                "🔒 https://www.google.com  [Click to Type URL / Search]",
+                new Vector3(-0.25f, 0.32f, -0.025f),
+                new Vector2(0.70f, 0.065f),
+                parent,
+                () => ActivateSearchInput(),
+                new Color(0.12f, 0.22f, 0.36f)
             );
 
             // Action Buttons beside address bar
-            CreateButton("🔄 Refresh", new Vector3(0.34f, 0.32f, -0.025f), new Vector2(0.18f, 0.062f), parent, () => NavigateToUrl(currentUrl, "Webpage"), new Color(0.25f, 0.70f, 1.0f));
-            CreateButton("🚀 Open Full Web", new Vector3(0.55f, 0.32f, -0.025f), new Vector2(0.22f, 0.062f), parent, () => OpenUrlInBrowser(currentUrl), new Color(0.15f, 0.92f, 0.45f));
+            CreateButton("🔍 Go", new Vector3(0.16f, 0.32f, -0.025f), new Vector2(0.09f, 0.062f), parent, () => SubmitSearchQuery(searchInputBuffer), new Color(0.15f, 0.85f, 0.45f));
+            CreateButton("❌ Clear", new Vector3(0.27f, 0.32f, -0.025f), new Vector2(0.10f, 0.062f), parent, () => ClearSearchInput(), new Color(0.90f, 0.35f, 0.35f));
+            CreateButton("🔄 Reload", new Vector3(0.39f, 0.32f, -0.025f), new Vector2(0.11f, 0.062f), parent, () => NavigateToUrl(currentUrl, "Webpage"), new Color(0.25f, 0.70f, 1.0f));
+            CreateButton("🚀 Open Full Web", new Vector3(0.53f, 0.32f, -0.025f), new Vector2(0.15f, 0.062f), parent, () => OpenUrlInBrowser(currentUrl), new Color(0.15f, 0.92f, 0.45f));
 
-            // Bookmarks Bar
-            CreateButton("🔍 Google", new Vector3(-0.52f, 0.23f, -0.025f), new Vector2(0.18f, 0.052f), parent, () => NavigateToUrl("https://www.google.com", "Google Search"), new Color(0.2f, 0.55f, 1.0f));
-            CreateButton("🔴 YouTube", new Vector3(-0.31f, 0.23f, -0.025f), new Vector2(0.18f, 0.052f), parent, () => NavigateToUrl("https://www.youtube.com", "YouTube Online"), new Color(1.0f, 0.3f, 0.3f));
-            CreateButton("📖 Wikipedia", new Vector3(-0.10f, 0.23f, -0.025f), new Vector2(0.19f, 0.052f), parent, () => NavigateToUrl("https://www.wikipedia.org", "Wikipedia Encyclopedia"), new Color(0.8f, 0.8f, 0.85f));
-            CreateButton("🐙 GitHub", new Vector3(0.11f, 0.23f, -0.025f), new Vector2(0.18f, 0.052f), parent, () => NavigateToUrl("https://github.com", "GitHub Developer Hub"), new Color(0.6f, 0.4f, 0.9f));
-            CreateButton("📰 Live Tech News", new Vector3(0.35f, 0.23f, -0.025f), new Vector2(0.25f, 0.052f), parent, () => FetchLiveNews(), new Color(1.0f, 0.65f, 0.15f));
-            CreateButton("⚡ Speedtest", new Vector3(0.56f, 0.23f, -0.025f), new Vector2(0.16f, 0.052f), parent, () => PingInternet(), new Color(0.15f, 0.95f, 0.50f));
+            // Bookmarks Bar (Row of quick interactive sites)
+            CreateButton("🔍 Google", new Vector3(-0.54f, 0.23f, -0.025f), new Vector2(0.16f, 0.052f), parent, () => NavigateToUrl("https://www.google.com", "Google Search"), new Color(0.2f, 0.55f, 1.0f));
+            CreateButton("🔴 YouTube", new Vector3(-0.36f, 0.23f, -0.025f), new Vector2(0.17f, 0.052f), parent, () => NavigateToUrl("https://www.youtube.com", "YouTube Online"), new Color(1.0f, 0.3f, 0.3f));
+            CreateButton("📖 Wikipedia", new Vector3(-0.17f, 0.23f, -0.025f), new Vector2(0.18f, 0.052f), parent, () => NavigateToUrl("https://www.wikipedia.org", "Wikipedia Encyclopedia"), new Color(0.8f, 0.8f, 0.85f));
+            CreateButton("🐙 GitHub", new Vector3(0.03f, 0.23f, -0.025f), new Vector2(0.18f, 0.052f), parent, () => NavigateToUrl("https://github.com", "GitHub Developer Hub"), new Color(0.6f, 0.4f, 0.9f));
+            CreateButton("📰 Tech News", new Vector3(0.23f, 0.23f, -0.025f), new Vector2(0.18f, 0.052f), parent, () => FetchLiveNews(), new Color(1.0f, 0.65f, 0.15f));
+            CreateButton("⚡ Speedtest", new Vector3(0.41f, 0.23f, -0.025f), new Vector2(0.15f, 0.052f), parent, () => PingInternet(), new Color(0.15f, 0.95f, 0.50f));
+            CreateButton("🤖 Gemini", new Vector3(0.56f, 0.23f, -0.025f), new Vector2(0.13f, 0.052f), parent, () => SwitchTab(HubTab.GeminiAssistant), new Color(0.75f, 0.40f, 1.0f));
 
             // In-Screen Live Web Viewport
             CreateQuadPanel("Chrome_Viewport", new Vector3(0, -0.03f, -0.015f), new Vector2(1.36f, 0.42f), parent, texViewport, Color.white);
@@ -546,9 +728,9 @@ namespace OmniOS.Apps.MediaHub
                 "🟢 <b>Google Chrome Browser for Android 15</b>\n\n" +
                 "• <b>Status:</b> Connected to Worldwide Internet via Wi-Fi 7 & 5G Ultra\n" +
                 "• <b>Default Engine:</b> Google Search (Encrypted HTTPS / TLS 1.3)\n" +
-                "• <b>Interactive Features:</b> Click any bookmark above to perform a live web request!\n" +
-                "• <b>Live Query Engine:</b> Displays real round-trip ping latency and HTTP response headers.\n\n" +
-                "👉 <i>Click '🚀 Open Full Web' or any bookmark above to browse the live internet!</i>",
+                "• <b>Mouse & Keyboard Enabled:</b> Click the URL bar above to type any website or search term!\n" +
+                "• <b>Instant Search:</b> Type e.g. 'openai', 'unity', 'weather', 'meta' and hit [ENTER]!\n\n" +
+                "👉 <i>Click '🚀 Open Full Web' or any bookmark above to browse live internet!</i>",
                 new Vector3(0, -0.03f, -0.025f),
                 parent, 25, 0.0025f,
                 new Color(0.92f, 0.96f, 1.0f, 1.0f),
@@ -556,7 +738,7 @@ namespace OmniOS.Apps.MediaHub
             );
 
             // Large Open in Desktop Browser Call-to-Action Button
-            CreateButton("🌐 Launch Active Webpage in Full Screen Browser", new Vector3(0, -0.28f, -0.025f), new Vector2(0.85f, 0.068f), parent, () => OpenUrlInBrowser(currentUrl), new Color(0.15f, 0.92f, 0.45f));
+            CreateButton("🌐 Launch Active Webpage in Full Screen Desktop Browser", new Vector3(0, -0.28f, -0.025f), new Vector2(0.85f, 0.068f), parent, () => OpenUrlInBrowser(currentUrl), new Color(0.15f, 0.92f, 0.45f));
         }
 
         // ==================== 3. YOUTUBE VIDEO PLAYER ====================
