@@ -27,6 +27,7 @@ namespace OmniOS.Interaction
         private GameObject keyboardRoot;
         private TextMesh livePreviewText;
         private SpatialButton3D shiftButton;
+        private string currentBuffer = "";
 
         private readonly List<(SpatialButton3D btn, char upperChar, char lowerChar)> letterKeyList = 
             new List<(SpatialButton3D, char, char)>();
@@ -301,10 +302,23 @@ namespace OmniOS.Interaction
 
         public void SetPreviewText(string text)
         {
+            currentBuffer = text ?? "";
+            UpdatePreviewText();
+        }
+
+        private void Update()
+        {
+            if (!isOpen || livePreviewText == null) return;
+            UpdatePreviewText();
+        }
+
+        private void UpdatePreviewText()
+        {
             if (livePreviewText != null)
             {
-                string disp = string.IsNullOrEmpty(text) ? "Type with keys below..." : text;
-                livePreviewText.text = $"⌨️ Live: \"{disp}\"";
+                string cursorSymbol = ((int)(Time.unscaledTime * 3.0f) % 2 == 0) ? "|" : " ";
+                string disp = string.IsNullOrEmpty(currentBuffer) ? "Click 3D keys below to type" : currentBuffer;
+                livePreviewText.text = $"⌨️ Live Input: \"{disp}{cursorSymbol}\"";
             }
         }
 
@@ -313,6 +327,7 @@ namespace OmniOS.Interaction
             isOpen = true;
             gameObject.SetActive(true);
             if (keyboardRoot != null) keyboardRoot.SetActive(true);
+            UpdatePreviewText();
             SpatialAudioEngine.Instance?.PlayWindowOpen();
         }
 

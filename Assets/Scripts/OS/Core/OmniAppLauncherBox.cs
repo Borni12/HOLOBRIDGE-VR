@@ -45,9 +45,9 @@ namespace OmniOS.Core
         private int activeCategory = 0;
         private readonly string[] categoryLabels = new string[]
         {
-            "⭐ All Apps & 5D (13)",
+            "⭐ All Apps & 5D (14)",
             "🌟 5D Flagship Metaphors (6)",
-            "📱 Spatial OS Apps (6)",
+            "📱 Spatial OS Apps (7)",
             "🎮 PC Desktop & VR Guide"
         };
 
@@ -528,6 +528,12 @@ namespace OmniOS.Core
             // Define all cards
             List<Action> cardsToRender = new List<Action>();
 
+            // 0. HoloBridge 3DUI Collaborative Suite (IEEE VR 2027 Flagship Star)
+            if ((MatchesCategory(1) || MatchesCategory(2)) && MatchesSearch("HoloBridge 3DUI Collaborative Digital Twin IEEE VR 2027 PCDD TaskBubble handoff 0"))
+            {
+                cardsToRender.Add(() => RenderHoloBridgeCollabCard());
+            }
+
             // 1. Reality-Peel (5D)
             if (MatchesCategory(1) && MatchesSearch("Reality Peel 360 unprojection portal"))
             {
@@ -659,6 +665,66 @@ namespace OmniOS.Core
         #endregion
 
         #region App Cards Implementation
+
+        // 0. HoloBridge 3DUI Collaborative Suite (IEEE VR 2027 Flagship Star)
+        private void RenderHoloBridgeCollabCard()
+        {
+            GUILayout.BeginVertical(cardStyle);
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("🚀 <b>HoloBridge: 3DUI Collab (IEEE VR 2027)</b>", cardTitleStyle);
+            GUILayout.Label("<color=#ffd700>[Key: 0 / F1]</color>", cardBadgeStyle, GUILayout.Width(100));
+            GUILayout.EndHorizontal();
+
+            var collab = HoloBridge.Collaboration.HoloBridgeCollabManager.Instance;
+            string activeRole = (collab != null && collab.CoPresence != null) 
+                ? (collab.CoPresence.CurrentPerspective == HoloBridge.Collaboration.CrossDeviceCoPresence.ActivePerspective.VRHeadset ? "🥽 VR Headset" : "💻 Desktop PC")
+                : "💻 Desktop PC";
+            GUILayout.Label($"<color=#00e5ff>● Active Role: {activeRole}</color> | <color=#00ff88>🏆 3DUI Contest Star</color>", cardStatusStyle);
+
+            GUILayout.Label("Multi-user shared spatial interaction with Partner-Context Depth Disambiguation (PCDD) and TaskBubble micro-handoff on an occluded Quantum Aero-Turbine.", cardDescStyle);
+            GUILayout.Space(4);
+
+            GUILayout.BeginHorizontal();
+            GUI.color = new Color(0.0f, 0.95f, 1.0f);
+            if (GUILayout.Button("🚀 Open Workspace [0]", btnPrimaryStyle, GUILayout.Height(26)))
+            {
+                OnAppLaunched("holobridge_collab");
+            }
+            GUI.color = Color.white;
+
+            if (GUILayout.Button("🔄 Switch Role (VR/PC) [F1]", btnActionStyle, GUILayout.Width(165)))
+            {
+                collab?.CoPresence?.TogglePerspective();
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("💥 Explode Twin", btnActionStyle))
+            {
+                if (collab != null && collab.DigitalTwin != null)
+                {
+                    collab.DigitalTwin.ToggleExplodedView();
+                }
+            }
+            if (GUILayout.Button("👁️ Toggle X-Ray", btnActionStyle))
+            {
+                if (collab != null && collab.DigitalTwin != null)
+                {
+                    collab.DigitalTwin.ToggleXRay();
+                }
+            }
+            if (GUILayout.Button("📌 Add Pin", btnActionStyle))
+            {
+                if (collab != null && collab.Annotations != null)
+                {
+                    collab.Annotations.CreateDemoPin();
+                }
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.EndVertical();
+        }
 
         // 1. Reality-Peel 5D
         private void RenderRealityPeelCard()
@@ -1120,7 +1186,11 @@ namespace OmniOS.Core
             GUILayout.Label("• <b>Left-Click (Normal Mouse Click):</b> Fires the holographic laser pointer beam and clicks 3D buttons or opens windows.", cardDescStyle);
             GUILayout.Label("• <b>Tab, F4, or L:</b> Opens or closes this Master Apple Launchpad anytime.", cardDescStyle);
             GUILayout.Label("• <b>Space:</b> Re-centers your view and brings the active window directly in front of your eyes.", cardDescStyle);
-            GUILayout.Label("• <b>Number Keys 1 to 9:</b> Instantly summon any of the 9 spatial applications directly in front of you.", cardDescStyle);
+            GUILayout.Label("• <b>0 Key:</b> Instantly summon the <b>HoloBridge: 3DUI Collaborative Workspace (IEEE VR 2027)</b>.", cardDescStyle);
+            GUILayout.Label("• <b>F1 Key:</b> 1-Click Perspective Switcher (VR Collaborator View ⇄ Desktop PC View) — perfect for video recording!", cardDescStyle);
+            GUILayout.Label("• <b>F2 Key:</b> Toggle 2D HUD Screen Overlay on/off.", cardDescStyle);
+            GUILayout.Label("• <b>Left-Click on Turbine Twin:</b> Triggers Partner-Context Depth Disambiguation (PCDD) to select occluded inner bearings.", cardDescStyle);
+            GUILayout.Label("• <b>Number Keys 1 to 9:</b> Instantly summon any of the spatial applications directly in front of you.", cardDescStyle);
             GUILayout.Label("• <b>P Key:</b> Triggers the 3D Reality-Peel (2D to 360° unprojection).", cardDescStyle);
             GUILayout.Label("• <b>M Key:</b> Cycles Matter-Weave stiffness & squishes the physics continuum sphere.", cardDescStyle);
             GUILayout.Label("• <b>O Key:</b> Toggles the 5 Multiverse Predictive Time Orbs.", cardDescStyle);

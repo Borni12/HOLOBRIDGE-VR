@@ -264,15 +264,16 @@ namespace OmniOS.Core
                     else if (n.Contains("multiverse")) registeredApps["multiverse"] = win;
                     else if (n.Contains("spatial_canvas")) registeredApps["spatial_canvas"] = win;
                     else if (n.Contains("settings")) registeredApps["settings"] = win;
+                    else if (n.Contains("holobridge")) registeredApps["holobridge_collab"] = win;
                 }
             }
 
             if (registeredApps.ContainsKey("media_hub") && registeredApps.ContainsKey("scenery") && registeredApps.ContainsKey("camera")) return;
 
-            // 1. Android 15 Virtual Tablet & Internet Portal (Direct Center)
+            // 1. Android 15 Virtual Tablet & Internet Portal (Direct Center - Ergonomic 1.3m Distance)
             if (!registeredApps.ContainsKey("media_hub"))
             {
-                Vector3 mediaPos = headPos + headFwd * 1.75f + Vector3.up * 0.06f;
+                Vector3 mediaPos = headPos + headFwd * 1.30f + Vector3.up * 0.02f;
                 var mediaWin = CreateWindow("media_hub", "Android 15 Virtual Tablet (Vanilla Ice Cream • 5G)", mediaPos, Quaternion.LookRotation(headFwd));
                 mediaWin.gameObject.AddComponent<OmniAppMediaHub>();
                 mediaWin.Restore(); // Flagship app opens prominently on boot!
@@ -348,6 +349,15 @@ namespace OmniOS.Core
                 var settingsWin = CreateWindow("settings", "System Control Center", settingsPos, Quaternion.LookRotation(Quaternion.Euler(0, 82f, 0) * headFwd));
                 settingsWin.gameObject.AddComponent<OmniAppSettings>();
                 settingsWin.Minimize();
+            }
+
+            // 10. HoloBridge 3DUI Collaboration Suite (IEEE VR 2027 Flagship)
+            if (!registeredApps.ContainsKey("holobridge_collab"))
+            {
+                Vector3 collabPos = headPos + (Quaternion.Euler(0, -18f, 0) * headFwd) * 1.55f + Vector3.up * 0.05f;
+                var collabWin = CreateWindow("holobridge_collab", "HoloBridge: 3DUI Collaborative Workspace (IEEE VR 2027)", collabPos, Quaternion.LookRotation(Quaternion.Euler(0, -18f, 0) * headFwd));
+                collabWin.gameObject.AddComponent<OmniOS.Apps.HoloBridge.OmniAppHoloBridgeCollab>();
+                collabWin.Minimize();
             }
         }
 
@@ -439,13 +449,14 @@ namespace OmniOS.Core
                 metaverseEnv?.NextTheme();
                 SpatialAudioEngine.Instance?.PlayThemeChime();
             }
-            if (Input.GetKeyDown(KeyCode.F1))
+            if (Input.GetKeyDown(KeyCode.F2))
             {
                 Show2DOverlay = !Show2DOverlay;
                 ShowNotificationToast($"2D Screen Overlay: {(Show2DOverlay ? "ON" : "OFF")}");
             }
 
-            // 4. Number key shortcuts to toggle apps (1 to 9)
+            // 4. Number key shortcuts to toggle apps (0 to 9)
+            if (OmniInputHelper.CheckAlphaKey(0)) ToggleApp("holobridge_collab");
             if (OmniInputHelper.CheckAlphaKey(1)) ToggleApp("media_hub");
             if (OmniInputHelper.CheckAlphaKey(2)) ToggleApp("scenery");
             if (OmniInputHelper.CheckAlphaKey(3)) ToggleApp("camera");
@@ -498,6 +509,12 @@ namespace OmniOS.Core
         {
             if (userHead == null && Camera.main != null) userHead = Camera.main.transform;
             if (userHead == null) return;
+
+            // Enforce natural eye level so user never sinks into the floor
+            if (userHead.position.y < 1.45f)
+            {
+                userHead.position = new Vector3(userHead.position.x, 1.60f, userHead.position.z);
+            }
 
             Vector3 headPos = userHead.position;
             Vector3 headFwd = userHead.forward;

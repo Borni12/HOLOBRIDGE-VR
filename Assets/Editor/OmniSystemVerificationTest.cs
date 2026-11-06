@@ -159,6 +159,8 @@ namespace OmniOS.EditorTools
                         androidHub.SwitchTab(OmniAppMediaHub.HubTab.HomeScreen);
                         androidHub.SwitchTab(OmniAppMediaHub.HubTab.ChromeBrowser);
                         androidHub.NavigateToUrl("https://www.google.com", "Google Search");
+                        androidHub.ScrollViewport(1);
+                        androidHub.LoadWebSubSection(1);
                         androidHub.SwitchTab(OmniAppMediaHub.HubTab.AndroidSettings);
                         androidHub.PingInternet();
                         androidHub.SwitchTab(OmniAppMediaHub.HubTab.CameraPro);
@@ -166,14 +168,19 @@ namespace OmniOS.EditorTools
                         androidHub.CycleCameraZoom();   // Zoom 2x
                         androidHub.SwitchCameraFeed(); // Flip back to Outside World Metaverse Camera
                         androidHub.SwitchTab(OmniAppMediaHub.HubTab.YouTube);
+                        androidHub.SetChannel(1);
+                        androidHub.ToggleYouTubePlay();
+                        androidHub.SkipYouTubeTime(10f);
+                        androidHub.ToggleAudioMute();
                         androidHub.SwitchTab(OmniAppMediaHub.HubTab.HomeScreen);
+                        androidHub.CenterTabletPosition();
                         androidHub.ToggleVRKeyboard();
                         androidHub.OnVirtualKeyTyped("H");
                         androidHub.OnVirtualKeyTyped("O");
                         androidHub.OnVirtualKeyTyped("L");
                         androidHub.OnVirtualKeyTyped("O");
                         androidHub.ToggleVRKeyboard();
-                        AssertTest("Android 15 OS Multi-App & VR Virtual Keyboard Verification", true, "Successfully verified Home Screen, Chrome Browser, In-World VR Keyboard, Settings, Dual-Lens Camera, YouTube, and Internet ping");
+                        AssertTest("Android 15 OS Multi-App & VR Virtual Keyboard Verification", true, "Successfully verified Home Screen, Chrome Browser with in-screen articles & scrolling, In-World VR Keyboard, Settings, Dual-Lens Camera, YouTube themed channels & playhead, and Internet ping");
                     }
 
                     osManager.ToggleApp("scenery");
@@ -190,7 +197,7 @@ namespace OmniOS.EditorTools
                 }
 
                 // 12. Test Physical In-World 3D Buttons (SpatialButton3D)
-                var buttons3D = UnityEngine.Object.FindObjectsByType<SpatialButton3D>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                var buttons3D = UnityEngine.Object.FindObjectsByType<SpatialButton3D>(FindObjectsInactive.Include);
                 if (buttons3D.Length == 0 && osManager != null)
                 {
                     var mediaWin = osManager.GetAppWindow("media_hub");
@@ -200,7 +207,7 @@ namespace OmniOS.EditorTools
                         mediaWin = osManager.GetAppWindow("media_hub");
                     }
                     if (mediaWin != null) mediaWin.Restore();
-                    buttons3D = UnityEngine.Object.FindObjectsByType<SpatialButton3D>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                    buttons3D = UnityEngine.Object.FindObjectsByType<SpatialButton3D>(FindObjectsInactive.Include);
                 }
 
                 int buttonClicksTriggered = 0;

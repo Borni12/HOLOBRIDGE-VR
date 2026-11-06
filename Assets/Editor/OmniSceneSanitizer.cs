@@ -68,11 +68,17 @@ namespace OmniOS.EditorTools
                 "Tablet_Optical_Lens_Camera",
                 "[OMNI_EVENTSYSTEM]",
                 "[OMNI_LAUNCHPAD]",
+                "Metaverse_PlatformFloor",
+                "Metaverse_VirtualRoom_Root",
+                "[HOLOBRIDGE_COLLAB_ENGINE]",
+                "HoloBridge_SharedDigitalTwin",
                 "Cue"
             };
 
             string[] purgePrefixes = new string[]
             {
+                "Metaverse_Pillar_",
+                "Metaverse_Platform",
                 "TimeOrb_",
                 "Orb_Ring",
                 "Sophia_",
@@ -87,7 +93,9 @@ namespace OmniOS.EditorTools
                 "Window_matter_weave",
                 "Window_multiverse",
                 "Window_spatial_canvas",
-                "Window_settings"
+                "Window_settings",
+                "Window_holobridge_collab",
+                "SpatialPin_"
             };
 
             // Collect all GameObjects in scene (including inactive)

@@ -161,11 +161,27 @@ namespace OmniOS.Interaction
 
         private void Update()
         {
+            EnsureControllerTransform();
             UpdateDesktopNavigation();
             UpdateInput();
             UpdateRaycast();
             HandleInteractiveElements();
             UpdateWindowDragging();
+        }
+
+        private void EnsureControllerTransform()
+        {
+            if (rightHandTransform != null) return;
+            var transforms = UnityEngine.Object.FindObjectsByType<Transform>();
+            foreach (var t in transforms)
+            {
+                string n = t.name.ToLower();
+                if ((n.Contains("righthand") || n.Contains("right controller") || n.Contains("right hand")) && !n.Contains("direct"))
+                {
+                    rightHandTransform = t;
+                    break;
+                }
+            }
         }
 
         private void UpdateDesktopNavigation()
@@ -271,8 +287,8 @@ namespace OmniOS.Interaction
 
             float currentSpeed = moveSpeed * (Input.GetKey(KeyCode.LeftShift) ? 1.75f : 1.0f);
 
-            // Vertical flight: E / Space = Up, Q / C = Down
-            if (Input.GetKey(KeyCode.E) || (Input.GetKey(KeyCode.Space) && !isLooking))
+            // Vertical movement: strictly E for fly up, Q for down (Space is reserved for Recenter)
+            if (Input.GetKey(KeyCode.E))
             {
                 headCameraTransform.position += Vector3.up * (currentSpeed * Time.deltaTime);
             }
@@ -293,6 +309,14 @@ namespace OmniOS.Interaction
 
                 Vector3 delta = (fwd * moveZ + right * moveX) * (currentSpeed * Time.deltaTime);
                 headCameraTransform.position += delta;
+            }
+
+            // Ground-level stability clamp: camera can NEVER sink into or fall below the floor!
+            if (headCameraTransform.position.y < 1.45f)
+            {
+                Vector3 pos = headCameraTransform.position;
+                pos.y = 1.60f;
+                headCameraTransform.position = pos;
             }
         }
 
@@ -319,7 +343,37 @@ namespace OmniOS.Interaction
                 }
 
                 rightDevice.TryGetFeatureValue(CommonUsages.triggerButton, out vrTrigger);
+                if (!vrTrigger && rightDevice.TryGetFeatureValue(CommonUsages.trigger, out float tVal))
+                {
+                    vrTrigger = tVal > 0.25f;
+                }
+
                 rightDevice.TryGetFeatureValue(CommonUsages.gripButton, out vrGrip);
+                if (!vrGrip && rightDevice.TryGetFeatureValue(CommonUsages.grip, out float gVal))
+                {
+                    vrGrip = gVal > 0.25f;
+                }
+            }
+
+            var leftDevice = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
+            if (leftDevice.isValid)
+            {
+                if (!vrTrigger)
+                {
+                    leftDevice.TryGetFeatureValue(CommonUsages.triggerButton, out vrTrigger);
+                    if (!vrTrigger && leftDevice.TryGetFeatureValue(CommonUsages.trigger, out float ltVal))
+                    {
+                        vrTrigger = ltVal > 0.25f;
+                    }
+                }
+                if (!vrGrip)
+                {
+                    leftDevice.TryGetFeatureValue(CommonUsages.gripButton, out vrGrip);
+                    if (!vrGrip && leftDevice.TryGetFeatureValue(CommonUsages.grip, out float lgVal))
+                    {
+                        vrGrip = lgVal > 0.25f;
+                    }
+                }
             }
 
             // 2. Check Desktop Mouse Fallback
@@ -473,7 +527,9 @@ namespace OmniOS.Interaction
                         colGo.name.Contains("GrabBar") ||
                         colGo.name.Contains("Camera_Viewfinder") ||
                         colGo.name.Contains("CameraApp_LiveScreen") ||
-                        colGo.name.Contains("YouTube_Screen_Display"))
+                        colGo.name.Contains("YouTube_Screen_Display") ||
+                        colGo.name.Contains("Chrome_Viewport") ||
+                        colGo.name.Contains("Tablet_Screen_Backdrop"))
                     {
                         if (raycastHits[i].distance < bestDist)
                         {
@@ -512,7 +568,10 @@ namespace OmniOS.Interaction
                     bool isHoveringInteractive = (CurrentHitObject.GetComponentInParent<SpatialButton3D>() != null ||
                                                   CurrentHitObject.GetComponentInParent<SpatialSlider3D>() != null ||
                                                   CurrentHitObject.name.Contains("Window_Btn") ||
-                                                  CurrentHitObject.name.Contains("GrabBar"));
+                                                  CurrentHitObject.name.Contains("GrabBar") ||
+                                                  CurrentHitObject.name.Contains("YouTube_Screen_Display") ||
+                                                  CurrentHitObject.name.Contains("Chrome_Viewport") ||
+                                                  CurrentHitObject.name.Contains("Tablet_Screen_Backdrop"));
 
                     float cursorScale = Mathf.Clamp(0.016f * dist, 0.012f, 0.05f) * (isHoveringInteractive ? 1.6f : 1.0f);
                     cursorDot.localScale = Vector3.one * cursorScale;
@@ -586,73 +645,140 @@ namespace OmniOS.Interaction
             // 2. Button & Live Screen Instant Press / Click (100% reliable)
             if (IsTriggerDown)
             {
-                if (hoveredButton != null)
+                if (targetButton != null || hoveredButton != null)
                 {
-                    pressedButton = hoveredButton;
-                    pressedButton.OnPointerDown();
+                    pressedButton = targetButton ?? hoveredButton;
+                    pressedButton.TriggerClick();
                     TriggerHaptic(0.65f, 0.04f);
                 }
-                else if (CurrentHitObject != null && (CurrentHitObject.name.Contains("Camera_Viewfinder") || CurrentHitObject.name.Contains("CameraApp_LiveScreen") || CurrentHitObject.name.Contains("YouTube_Screen_Display")))
+                else if (CurrentHitObject != null)
                 {
-                    if (CurrentHitObject.name.Contains("YouTube_Screen_Display"))
+                    string hitName = CurrentHitObject.name;
+                    var mediaApp = CurrentHitObject.GetComponentInParent<OmniOS.Apps.MediaHub.OmniAppMediaHub>();
+                    if (mediaApp != null)
                     {
-                        var mediaApp = CurrentHitObject.GetComponentInParent<OmniOS.Apps.MediaHub.OmniAppMediaHub>();
-                        if (mediaApp != null)
+                        if (hitName.Contains("YouTube_Screen_Display"))
                         {
                             mediaApp.ToggleYouTubePlay();
                             TriggerHaptic(0.5f, 0.03f);
                         }
-                    }
-                    else
-                    {
-                        var mediaApp = CurrentHitObject.GetComponentInParent<OmniOS.Apps.MediaHub.OmniAppMediaHub>();
-                        if (mediaApp != null)
+                        else if (hitName.Contains("Chrome_Viewport"))
+                        {
+                            mediaApp.ActivateSearchInput();
+                            TriggerHaptic(0.5f, 0.03f);
+                        }
+                        else if (hitName.Contains("Tablet_Screen_Backdrop"))
+                        {
+                            if (mediaApp.CurrentTab == OmniOS.Apps.MediaHub.OmniAppMediaHub.HubTab.HomeScreen)
+                            {
+                                mediaApp.SwitchTab(OmniOS.Apps.MediaHub.OmniAppMediaHub.HubTab.ChromeBrowser);
+                            }
+                            mediaApp.ActivateSearchInput();
+                            TriggerHaptic(0.5f, 0.03f);
+                        }
+                        else if (hitName.Contains("Camera_Viewfinder"))
                         {
                             mediaApp.SwitchCameraFeed();
                             TriggerHaptic(0.5f, 0.03f);
                         }
-                        var camApp = CurrentHitObject.GetComponentInParent<OmniOS.Apps.CameraApp.OmniAppCamera>();
-                        if (camApp != null)
-                        {
-                            camApp.ToggleDeviceWebcam();
-                            TriggerHaptic(0.5f, 0.03f);
-                        }
+                    }
+
+                    var camApp = CurrentHitObject.GetComponentInParent<OmniOS.Apps.CameraApp.OmniAppCamera>();
+                    if (camApp != null && (hitName.Contains("Camera_Viewfinder") || hitName.Contains("CameraApp_LiveScreen")))
+                    {
+                        camApp.ToggleDeviceWebcam();
+                        TriggerHaptic(0.5f, 0.03f);
                     }
                 }
-                else if (!isUsingVR)
+                else
                 {
-                    // Direct ScreenPointToRay fallback on desktop mouse click
+                    // Direct ScreenPointToRay universal fallback on click (Always check all ray hits sorted by distance)
+                    Camera clickCam = headCameraTransform != null ? headCameraTransform.GetComponent<Camera>() : null;
+                    if (clickCam == null || clickCam.targetTexture != null) clickCam = Camera.main;
+                    if (clickCam == null || clickCam.targetTexture != null) clickCam = OmniGenesis.Core.OmniInputHelper.ResolveActiveCamera();
+
                     Ray clickRay = GetCurrentPointerRay();
-                    if (Physics.Raycast(clickRay, out RaycastHit directHit, maxRayDistance, interactionLayers))
+                    if (Input.GetMouseButtonDown(0) && clickCam != null)
                     {
-                        var directBtn = directHit.collider.GetComponentInParent<SpatialButton3D>();
+                        clickRay = clickCam.ScreenPointToRay(Input.mousePosition);
+                    }
+
+                    RaycastHit[] directHits = Physics.RaycastAll(clickRay, maxRayDistance, interactionLayers);
+                    if (directHits != null && directHits.Length > 0)
+                    {
+                        Array.Sort(directHits, (a, b) => a.distance.CompareTo(b.distance));
+                        SpatialButton3D directBtn = null;
+                        GameObject specialHit = null;
+                        Vector3 hitPos = Vector3.zero;
+
+                        foreach (var dh in directHits)
+                        {
+                            var b = dh.collider.GetComponentInParent<SpatialButton3D>();
+                            if (b != null)
+                            {
+                                directBtn = b;
+                                break;
+                            }
+                            if (specialHit == null && (dh.collider.name.Contains("YouTube_Screen_Display") ||
+                                                       dh.collider.name.Contains("Camera_Viewfinder") ||
+                                                       dh.collider.name.Contains("CameraApp_LiveScreen") ||
+                                                       dh.collider.name.Contains("Chrome_Viewport") ||
+                                                       dh.collider.name.Contains("Tablet_Screen_Backdrop")))
+                            {
+                                specialHit = dh.collider.gameObject;
+                                hitPos = dh.point;
+                            }
+                        }
+
                         if (directBtn != null)
                         {
                             directBtn.TriggerClick();
                             TriggerHaptic(0.65f, 0.04f);
                         }
-                        else if (directHit.collider.name.Contains("YouTube_Screen_Display"))
+                        else if (specialHit != null)
                         {
-                            var mediaApp = directHit.collider.GetComponentInParent<OmniOS.Apps.MediaHub.OmniAppMediaHub>();
-                            if (mediaApp != null)
+                            var mediaApp = specialHit.GetComponentInParent<OmniOS.Apps.MediaHub.OmniAppMediaHub>();
+                            if (specialHit.name.Contains("YouTube_Screen_Display"))
                             {
-                                mediaApp.ToggleYouTubePlay();
-                                TriggerHaptic(0.5f, 0.03f);
+                                if (mediaApp != null)
+                                {
+                                    mediaApp.ToggleYouTubePlay();
+                                    TriggerHaptic(0.5f, 0.03f);
+                                }
                             }
-                        }
-                        else if (directHit.collider.name.Contains("Camera_Viewfinder") || directHit.collider.name.Contains("CameraApp_LiveScreen"))
-                        {
-                            var mediaApp = directHit.collider.GetComponentInParent<OmniOS.Apps.MediaHub.OmniAppMediaHub>();
-                            if (mediaApp != null)
+                            else if (specialHit.name.Contains("Camera_Viewfinder") || specialHit.name.Contains("CameraApp_LiveScreen"))
                             {
-                                mediaApp.SwitchCameraFeed();
-                                TriggerHaptic(0.5f, 0.03f);
+                                if (mediaApp != null)
+                                {
+                                    mediaApp.SwitchCameraFeed();
+                                    TriggerHaptic(0.5f, 0.03f);
+                                }
+                                var camApp = specialHit.GetComponentInParent<OmniOS.Apps.CameraApp.OmniAppCamera>();
+                                if (camApp != null)
+                                {
+                                    camApp.ToggleDeviceWebcam();
+                                    TriggerHaptic(0.5f, 0.03f);
+                                }
                             }
-                            var camApp = directHit.collider.GetComponentInParent<OmniOS.Apps.CameraApp.OmniAppCamera>();
-                            if (camApp != null)
+                            else if (specialHit.name.Contains("Chrome_Viewport"))
                             {
-                                camApp.ToggleDeviceWebcam();
-                                TriggerHaptic(0.5f, 0.03f);
+                                if (mediaApp != null)
+                                {
+                                    mediaApp.ActivateSearchInput();
+                                    TriggerHaptic(0.4f, 0.02f);
+                                }
+                            }
+                            else if (specialHit.name.Contains("Tablet_Screen_Backdrop"))
+                            {
+                                if (mediaApp != null)
+                                {
+                                    if (mediaApp.CurrentTab == OmniOS.Apps.MediaHub.OmniAppMediaHub.HubTab.HomeScreen)
+                                    {
+                                        mediaApp.SwitchTab(OmniOS.Apps.MediaHub.OmniAppMediaHub.HubTab.ChromeBrowser);
+                                    }
+                                    mediaApp.ActivateSearchInput();
+                                    TriggerHaptic(0.3f, 0.015f);
+                                }
                             }
                         }
                     }

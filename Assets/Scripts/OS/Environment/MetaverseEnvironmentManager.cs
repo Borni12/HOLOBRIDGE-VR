@@ -41,62 +41,28 @@ namespace OmniOS.Environment
 
         private void BuildMetaverseRoom()
         {
-            // Eliminate dull gray fog that washed out the scene and made visuals vague
+            // Clean lighting that honors the existing scene environment
             RenderSettings.fog = false;
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.18f, 0.22f, 0.32f, 1f);
+            RenderSettings.ambientLight = new Color(0.22f, 0.25f, 0.35f, 1f);
 
             environmentRoot = new GameObject("Metaverse_VirtualRoom_Root");
             environmentRoot.transform.SetParent(transform, false);
 
-            // 1. Center Observation Platform Floor
-            platformFloor = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            platformFloor.name = "Metaverse_PlatformFloor";
-            platformFloor.transform.SetParent(environmentRoot.transform, false);
-            platformFloor.transform.localScale = new Vector3(platformRadius * 2f, 0.2f, platformRadius * 2f);
-            platformFloor.transform.localPosition = new Vector3(0, -0.1f, 0);
+            // Note: Standard natural floor from Starter Assets (Grid) is preserved.
+            // We do NOT spawn an artificial elevated cylinder floor to keep the environment completely normal and clean.
 
-            Shader floorShader = Shader.Find("OmniOS/MetaverseFloor");
-            if (floorShader == null) floorShader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-
-            floorMaterial = new Material(floorShader);
-            platformFloor.GetComponent<Renderer>().material = floorMaterial;
-
-            // 2. 8 Architectural Holographic Pillars around perimeter
-            Shader unlitShader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default");
-            for (int i = 0; i < 8; i++)
-            {
-                float angle = i * (Mathf.PI * 2f / 8f);
-                float x = Mathf.Cos(angle) * (platformRadius * 0.92f);
-                float z = Mathf.Sin(angle) * (platformRadius * 0.92f);
-
-                GameObject pillar = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                pillar.name = $"Metaverse_Pillar_{i}";
-                pillar.transform.SetParent(environmentRoot.transform, false);
-                pillar.transform.localScale = new Vector3(0.28f, 5.0f, 0.28f);
-                pillar.transform.localPosition = new Vector3(x, 2.4f, z);
-
-                // Destroy pillar collider to allow smooth movement
-                Destroy(pillar.GetComponent<Collider>());
-
-                Material pillarMat = new Material(unlitShader);
-                pillarMat.color = new Color(0.0f, 0.85f, 1.0f, 0.85f);
-                if (pillarMat.HasProperty("_BaseColor")) pillarMat.SetColor("_BaseColor", new Color(0.0f, 0.85f, 1.0f, 0.85f));
-                pillar.GetComponent<Renderer>().material = pillarMat;
-                pillars[i] = pillar;
-            }
-
-            // 3. Central Atmospheric Ambient Light (Volumetric illumination)
+            // Central Atmospheric Ambient Light (Soft illumination)
             GameObject lightObj = new GameObject("Metaverse_AmbientLight");
             lightObj.transform.SetParent(environmentRoot.transform, false);
-            lightObj.transform.localPosition = new Vector3(0, 4.5f, 0);
+            lightObj.transform.localPosition = new Vector3(0, 4.0f, 0);
             centerAmbientLight = lightObj.AddComponent<Light>();
             centerAmbientLight.type = LightType.Point;
-            centerAmbientLight.range = 35.0f;
-            centerAmbientLight.intensity = 2.2f;
+            centerAmbientLight.range = 25.0f;
+            centerAmbientLight.intensity = 1.8f;
             centerAmbientLight.color = new Color(0.0f, 0.82f, 1.0f);
 
-            // 4. Ambient Floating Dust Motes
+            // Subtle Ambient Floating Dust Motes
             GameObject partObj = new GameObject("Metaverse_AmbientParticles");
             partObj.transform.SetParent(environmentRoot.transform, false);
             partObj.transform.localPosition = new Vector3(0, 1.8f, 0);
@@ -104,18 +70,18 @@ namespace OmniOS.Environment
             ambientParticles = partObj.AddComponent<ParticleSystem>();
             var main = ambientParticles.main;
             main.loop = true;
-            main.startLifetime = 8.0f;
-            main.startSpeed = 0.08f;
-            main.startSize = 0.025f;
-            main.maxParticles = 120;
-            main.startColor = new Color(0.0f, 0.9f, 1.0f, 0.45f);
+            main.startLifetime = 6.0f;
+            main.startSpeed = 0.05f;
+            main.startSize = 0.02f;
+            main.maxParticles = 60;
+            main.startColor = new Color(0.0f, 0.9f, 1.0f, 0.35f);
 
             var emission = ambientParticles.emission;
-            emission.rateOverTime = 14f;
+            emission.rateOverTime = 8f;
 
             var shape = ambientParticles.shape;
             shape.shapeType = ParticleSystemShapeType.Box;
-            shape.scale = new Vector3(platformRadius * 1.5f, 4.0f, platformRadius * 1.5f);
+            shape.scale = new Vector3(platformRadius * 1.2f, 3.0f, platformRadius * 1.2f);
         }
 
         public void NextTheme()

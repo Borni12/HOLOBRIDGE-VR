@@ -92,7 +92,7 @@ namespace OmniOS.Core
 
             // Destroy all colliders on decorative backplate so it NEVER intercepts raycast clicks meant for buttons
             var backplateColliders = backplate.GetComponents<Collider>();
-            foreach (var c in backplateColliders) Destroy(c);
+            foreach (var c in backplateColliders) DestroyImmediate(c);
 
             Material glassMat = SpatialTheme.CreateGlassMaterial(SpatialTheme.GlassBase, SpatialTheme.GlassBorder);
             backplate.GetComponent<Renderer>().material = glassMat;

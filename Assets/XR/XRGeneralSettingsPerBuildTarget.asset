@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: Android Providers
   m_EditorClassIdentifier: 
   m_RequiresSettingsUpdate: 0
-  m_AutomaticLoading: 0
-  m_AutomaticRunning: 0
+  m_AutomaticLoading: 1
+  m_AutomaticRunning: 1
   m_Loaders:
   - {fileID: 11400000, guid: 28fe04729daeb2345bebc951fad25769, type: 2}
 --- !u!114 &-7745824774400222577
@@ -44,8 +44,8 @@ MonoBehaviour:
   m_Name: Standalone Providers
   m_EditorClassIdentifier: 
   m_RequiresSettingsUpdate: 0
-  m_AutomaticLoading: 0
-  m_AutomaticRunning: 0
+  m_AutomaticLoading: 1
+  m_AutomaticRunning: 1
   m_Loaders:
   - {fileID: 11400000, guid: eb6d337c1678a97408eb0481002d9ae2, type: 2}
 --- !u!114 &-1491542297996764551
@@ -110,7 +110,7 @@ MonoBehaviour:
   m_Name: Android Providers
   m_EditorClassIdentifier: 
   m_RequiresSettingsUpdate: 0
-  m_AutomaticLoading: 0
-  m_AutomaticRunning: 0
+  m_AutomaticLoading: 1
+  m_AutomaticRunning: 1
   m_Loaders:
   - {fileID: 11400000, guid: 28fe04729daeb2345bebc951fad25769, type: 2}

@@ -1,6 +1,6 @@
 ================================================================================
            OMNI-GENESIS 5D & OMNIOS FULL BUTTON & KEY DIAGNOSTIC REPORT          
-           Execution Timestamp: 2026-11-05 19:26:43              
+           Execution Timestamp: 2026-11-05 21:19:12              
 ================================================================================
 
 [PASS] Camera Resolution -> Active Camera 'Main Camera' resolved and tagged 'MainCamera'
@@ -19,11 +19,11 @@
 [PASS] Button Space (Recenter View) -> Spatial dock and open windows snapped in front of gaze
 [PASS] Button H (Zen Clean View Toggle) -> Dock visibility toggled for clean scenic view
 [PASS] Button 1 (Android 15 Tablet Window) -> Android 15 Tablet Window created and restored
-[PASS] Android 15 OS Multi-App & Dual-Camera Verification -> Successfully verified Home Screen, Chrome Browser, Settings, Dual-Lens Camera (Front/Rear), YouTube, and Internet ping
+[PASS] Android 15 OS Multi-App & VR Virtual Keyboard Verification -> Successfully verified Home Screen, Chrome Browser with in-screen articles & scrolling, In-World VR Keyboard, Settings, Dual-Lens Camera, YouTube themed channels & playhead, and Internet ping
 [PASS] Button 2 (Scenery App Toggle) -> Metaverse Scenery Window created and restored
 [PASS] Button 3 (OmniCam App Toggle) -> OmniCam Window created and restored
 [PASS] Button R / F5 (Full System Reload & Auto-Save) -> Complete OS kernel and 5D systems re-initialized & auto-saved
-[PASS] In-World 3D Buttons (SpatialButton3D) -> All 98 in-world physical 3D buttons triggered successfully (100% Passed without errors)
+[PASS] In-World 3D Buttons (SpatialButton3D) -> All 11 in-world physical 3D buttons triggered successfully (100% Passed without errors)
 [PASS] OmniInputHelper Key Polling -> Dual-mode polling (Legacy, New Input System, IMGUI) functional
 
 ================================================================================

@@ -16,8 +16,8 @@ namespace OmniOS.Core
     public class OmniOSBootSequence : MonoBehaviour
     {
         [Header("Configuration")]
-        [SerializeField] private float bootDuration = 3.2f;
-        [SerializeField] private bool skipBootInEditor = false;
+        [SerializeField] private float bootDuration = 0.4f;
+        [SerializeField] private bool skipBootInEditor = true;
 
         private Transform userHead;
         private GameObject bootEmblemRoot;
