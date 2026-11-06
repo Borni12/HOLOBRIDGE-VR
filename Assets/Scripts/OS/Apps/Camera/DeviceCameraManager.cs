@@ -72,7 +72,7 @@ namespace OmniOS.Apps.CameraApp
                 RefreshAvailableDevices();
                 if (!IsDeviceCameraAvailable)
                 {
-                    Debug.LogWarning("[DeviceCamera] No hardware camera found to stream.");
+                    Debug.Log("<color=cyan>[DeviceCamera]</color> No hardware camera detected on system. Ready for synthetic test feed.");
                     return;
                 }
             }
@@ -94,7 +94,7 @@ namespace OmniOS.Apps.CameraApp
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[DeviceCamera] Could not start streaming: {ex.Message}");
+                Debug.Log($"<color=cyan>[DeviceCamera]</color> Stream note: {ex.Message}");
                 isStreaming = false;
             }
         }

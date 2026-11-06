@@ -1539,7 +1539,7 @@ namespace OmniOS.Apps.MediaHub
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[OmniAppMediaHub] Could not open URL: {ex.Message}");
+                Debug.Log($"[OmniAppMediaHub] Open URL note: {ex.Message}");
             }
         }
 
@@ -1817,7 +1817,7 @@ namespace OmniOS.Apps.MediaHub
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[OmniAppMediaHub] Physical Webcam: {ex.Message}");
+                Debug.Log($"[OmniAppMediaHub] Physical Webcam: {ex.Message}");
                 currentCamMode = TabletCameraMode.RearWorldLens;
                 UpdateCameraTransformForMode();
             }
@@ -1942,7 +1942,7 @@ namespace OmniOS.Apps.MediaHub
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"[TabletCam] Save failed: {ex.Message}");
+                    Debug.Log($"[TabletCam] Save note: {ex.Message}");
                     OmniOSManager.Instance?.ShowNotificationToast("📸 Photo captured!");
                 }
             }

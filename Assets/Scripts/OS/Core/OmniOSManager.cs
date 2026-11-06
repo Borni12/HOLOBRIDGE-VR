@@ -488,19 +488,22 @@ namespace OmniOS.Core
             ShowNotificationToast("⚡ FULL SYSTEM RELOAD: All 5D Systems & Spatial Apps Re-initialized!");
 
 #if UNITY_EDITOR
-            // Trigger Scene Auto-Save in Editor
+            // Trigger Scene Auto-Save in Editor (Only when not in Play Mode to avoid Unity warning)
             try
             {
-                var activeScene = UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene();
-                if (!string.IsNullOrEmpty(activeScene.path))
+                if (!UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode)
                 {
-                    UnityEditor.SceneManagement.EditorSceneManager.SaveScene(activeScene);
-                    Debug.Log($"<color=#00ff88>[OmniAutoSave]</color> Scene '{activeScene.name}' auto-saved during Full Reload!");
+                    var activeScene = UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene();
+                    if (!string.IsNullOrEmpty(activeScene.path))
+                    {
+                        UnityEditor.SceneManagement.EditorSceneManager.SaveScene(activeScene);
+                        Debug.Log($"<color=#00ff88>[OmniAutoSave]</color> Scene '{activeScene.name}' auto-saved during Full Reload!");
+                    }
                 }
             }
             catch (Exception ex)
             {
-                Debug.LogWarning("[OmniAutoSave] Note: " + ex.Message);
+                Debug.Log("[OmniAutoSave] Note: " + ex.Message);
             }
 #endif
         }

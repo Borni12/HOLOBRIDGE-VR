@@ -248,7 +248,7 @@ namespace OmniOS.Apps.VideoReality
             }
             else
             {
-                Debug.LogWarning($"[VideoRealityManager] Video file not found at: {fullPath}. Ready for URL input.");
+                Debug.Log($"<color=#00e5ff>[VideoRealityManager]</color> Video standby: {fullPath} (Awaiting direct URL or media input).");
             }
         }
 

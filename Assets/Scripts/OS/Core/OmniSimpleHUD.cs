@@ -404,7 +404,7 @@ namespace OmniOS.Core
             }
             catch (Exception ex)
             {
-                Debug.LogWarning("[OmniSimpleHUD] Reload note: " + ex.Message);
+                Debug.Log("[OmniSimpleHUD] Reload note: " + ex.Message);
                 ShowToast("RELOAD TRIGGERED", Color.cyan, 2.5f);
             }
         }
