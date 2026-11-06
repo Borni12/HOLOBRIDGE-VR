@@ -122,6 +122,7 @@ namespace OmniOS.Apps.MediaHub
         private bool isSearchTyping = false;
         private string searchInputBuffer = "https://www.google.com";
         private SpatialButton3D addressBarBtn;
+        private SpatialButton3D homeSearchBarBtn;
         private float cursorBlinkTimer = 0f;
 
         // In-World 3D VR Virtual Keyboard Reference
@@ -273,13 +274,21 @@ namespace OmniOS.Apps.MediaHub
                         SpatialButton3D targetBtn = null;
                         GameObject specialTarget = null;
                         Vector3 hitPoint = Vector3.zero;
-                        bool hitTabletChassis = false;
 
                         foreach (var hit in hits)
                         {
-                            if (hit.collider.transform.IsChildOf(transform))
+                            bool isOurs = hit.collider.transform.IsChildOf(transform) || 
+                                         (vrKeyboard != null && hit.collider.transform.IsChildOf(vrKeyboard.transform));
+                            if (isOurs)
                             {
-                                hitTabletChassis = true;
+                                // Pass A: Search Bar / Address Bar high-priority match
+                                if (hit.collider.name.Contains("SearchBar") || hit.collider.name.Contains("AddressBar"))
+                                {
+                                    targetBtn = hit.collider.GetComponentInParent<SpatialButton3D>();
+                                    if (targetBtn != null) break;
+                                }
+
+                                // Pass B: Any 3D Button (including VR Keyboard keys)
                                 var btn = hit.collider.GetComponentInParent<SpatialButton3D>();
                                 if (btn != null && targetBtn == null)
                                 {
@@ -290,7 +299,8 @@ namespace OmniOS.Apps.MediaHub
                                 if (specialTarget == null && (hit.collider.name.Contains("Camera_Viewfinder") ||
                                                               hit.collider.name.Contains("YouTube_Screen_Display") ||
                                                               hit.collider.name.Contains("Chrome_Viewport") ||
-                                                              hit.collider.name.Contains("Tablet_Screen_Backdrop")))
+                                                              hit.collider.name.Contains("Tablet_Screen_Backdrop") ||
+                                                              hit.collider.name.Contains("VR_Keyboard")))
                                 {
                                     specialTarget = hit.collider.gameObject;
                                     hitPoint = hit.point;
@@ -312,7 +322,7 @@ namespace OmniOS.Apps.MediaHub
                             {
                                 SwitchCameraFeed();
                             }
-                            else if (specialTarget.name.Contains("Chrome_Viewport"))
+                            else if (specialTarget.name.Contains("Chrome_Viewport") || specialTarget.name.Contains("SearchBar") || specialTarget.name.Contains("AddressBar"))
                             {
                                 ActivateSearchInput();
                             }
@@ -326,14 +336,6 @@ namespace OmniOS.Apps.MediaHub
                                 SpatialAudioEngine.Instance?.PlayHoverTick();
                             }
                         }
-                        else if (isSearchTyping && !hitTabletChassis)
-                        {
-                            // Clicked completely outside tablet while typing -> finish typing
-                            isSearchTyping = false;
-                            IsTypingActive = false;
-                            UpdateAddressBarDisplay();
-                            if (vrKeyboard != null) vrKeyboard.Hide();
-                        }
                     }
                 }
             }
@@ -344,7 +346,7 @@ namespace OmniOS.Apps.MediaHub
             if (isSearchTyping)
             {
                 cursorBlinkTimer += Time.unscaledDeltaTime;
-                if (cursorBlinkTimer >= 0.35f)
+                if (cursorBlinkTimer >= 0.30f)
                 {
                     cursorBlinkTimer = 0f;
                     UpdateAddressBarDisplay();
@@ -352,11 +354,11 @@ namespace OmniOS.Apps.MediaHub
                     {
                         string cursorSymbol = ((int)(Time.unscaledTime * 3.0f) % 2 == 0) ? "|" : " ";
                         browserViewportText.text = 
-                            "🌐 <b>Google Search & Web Input Active</b>\n\n" +
+                            "🌐 <b>Google Search & Web Address Bar Active</b>\n\n" +
                             $"👉 <b>Input:</b> <color=#00e5ff>\"{(string.IsNullOrEmpty(searchInputBuffer) ? "" : searchInputBuffer)}{cursorSymbol}\"</color>\n\n" +
-                            "• <b>Virtual 3D Keyboard:</b> Open below! Click the 3D keys with Mouse or VR Controller.\n" +
-                            "• <b>Physical Keyboard:</b> You can also directly type on your computer keyboard.\n" +
-                            "• <b>Submit:</b> Click '🔍 Go ↵' on keyboard or press [ENTER] to search!";
+                            "• <b>Desktop Mouse:</b> Click any 3D Virtual Key below or Bookmarks above!\n" +
+                            "• <b>PC Keyboard:</b> Type letters, numbers, or words directly on your computer keyboard.\n" +
+                            "• <b>Submit:</b> Press [ENTER] or click '🔍 Go ↵' to search Google!";
                     }
                 }
 
@@ -420,8 +422,9 @@ namespace OmniOS.Apps.MediaHub
                     return;
                 }
 
-                // 4. Character typing via Input.inputString
+                // 4. Character typing via Input.inputString with New Input System keycode fallback
                 string chars = Input.inputString;
+                bool typedAny = false;
                 if (!string.IsNullOrEmpty(chars))
                 {
                     foreach (char c in chars)
@@ -430,10 +433,53 @@ namespace OmniOS.Apps.MediaHub
                         if (!char.IsControl(c) && searchInputBuffer.Length < 140)
                         {
                             searchInputBuffer += c;
-                            UpdateAddressBarDisplay();
-                            if (vrKeyboard != null) vrKeyboard.SetPreviewText(searchInputBuffer);
+                            typedAny = true;
                         }
                     }
+                }
+
+                // Fallback for standalone PC when inputString is empty
+                if (!typedAny)
+                {
+                    if (Input.GetKeyDown(KeyCode.Space))
+                    {
+                        if (searchInputBuffer.Length < 140) { searchInputBuffer += " "; typedAny = true; }
+                    }
+                    else if (Input.GetKeyDown(KeyCode.Period))
+                    {
+                        if (searchInputBuffer.Length < 140) { searchInputBuffer += "."; typedAny = true; }
+                    }
+                    else
+                    {
+                        for (KeyCode k = KeyCode.A; k <= KeyCode.Z; k++)
+                        {
+                            if (Input.GetKeyDown(k))
+                            {
+                                bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+                                char c = shift ? (char)('A' + (k - KeyCode.A)) : (char)('a' + (k - KeyCode.A));
+                                if (searchInputBuffer.Length < 140) { searchInputBuffer += c; typedAny = true; }
+                                break;
+                            }
+                        }
+                        if (!typedAny)
+                        {
+                            for (KeyCode k = KeyCode.Alpha0; k <= KeyCode.Alpha9; k++)
+                            {
+                                if (Input.GetKeyDown(k))
+                                {
+                                    char c = (char)('0' + (k - KeyCode.Alpha0));
+                                    if (searchInputBuffer.Length < 140) { searchInputBuffer += c; typedAny = true; }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (typedAny)
+                {
+                    UpdateAddressBarDisplay();
+                    if (vrKeyboard != null) vrKeyboard.SetPreviewText(searchInputBuffer);
                 }
             }
             else
@@ -545,9 +591,9 @@ namespace OmniOS.Apps.MediaHub
             Transform root = spatialWindow.ContentRoot;
             GameObject kbObj = new GameObject("Android_VR_Keyboard_3D");
             kbObj.transform.SetParent(root, false);
-            // Positioned prominently below the tablet screen, angled 25 degrees upwards towards the user
-            kbObj.transform.localPosition = new Vector3(0f, -0.62f, -0.10f);
-            kbObj.transform.localRotation = Quaternion.Euler(25f, 0f, 0f);
+            // Positioned prominently right at the bottom bezel of the tablet screen, angled 18 degrees upwards towards the user eye
+            kbObj.transform.localPosition = new Vector3(0f, -0.46f, -0.05f);
+            kbObj.transform.localRotation = Quaternion.Euler(18f, 0f, 0f);
             vrKeyboard = kbObj.AddComponent<OmniOS.Interaction.OmniVRKeyboard3D>();
             vrKeyboard.Initialize(this);
         }
@@ -569,6 +615,12 @@ namespace OmniOS.Apps.MediaHub
             }
 
             if (addressBarBtn != null) addressBarBtn.ButtonText = disp;
+            if (homeSearchBarBtn != null)
+            {
+                homeSearchBarBtn.ButtonText = isSearchTyping
+                    ? $"🔍 {(string.IsNullOrEmpty(searchInputBuffer) ? "" : searchInputBuffer)}{cursorSymbol}  [↵ Enter]"
+                    : "🔍 Search Google or type URL...";
+            }
             if (browserAddressText != null) browserAddressText.text = disp;
         }
 
@@ -835,10 +887,17 @@ namespace OmniOS.Apps.MediaHub
             );
 
             // Google Search Widget & Quick VR Keyboard Access
-            CreateButton("🔍 Search Google or type URL...", new Vector3(-0.16f, 0.11f, -0.025f), new Vector2(0.82f, 0.075f), parent, () => {
+            homeSearchBarBtn = CreateButton("🔍 Search Google or type URL...", new Vector3(-0.16f, 0.11f, -0.040f), new Vector2(0.82f, 0.075f), parent, () => {
                 SwitchTab(HubTab.ChromeBrowser);
                 ActivateSearchInput();
             }, new Color(0.20f, 0.60f, 1.0f));
+            homeSearchBarBtn.gameObject.name = "Android_Home_SearchBar";
+            var homeCol = homeSearchBarBtn.GetComponent<BoxCollider>();
+            if (homeCol != null)
+            {
+                homeCol.size = new Vector3(0.82f, 0.075f, 0.08f);
+                homeCol.center = new Vector3(0, 0, -0.01f);
+            }
 
             CreateButton("⌨️ VR Keyboard", new Vector3(0.40f, 0.11f, -0.025f), new Vector2(0.30f, 0.075f), parent, () => {
                 ToggleVRKeyboard();
@@ -878,12 +937,19 @@ namespace OmniOS.Apps.MediaHub
             // Top URL Address Bar (Clickable Input Button: Click to focus & type with keyboard)
             addressBarBtn = CreateButton(
                 "🔒 https://www.google.com  [Click to Type URL / Search]",
-                new Vector3(-0.25f, 0.33f, -0.025f),
+                new Vector3(-0.25f, 0.33f, -0.040f),
                 new Vector2(0.70f, 0.062f),
                 parent,
                 () => ActivateSearchInput(),
                 new Color(0.12f, 0.22f, 0.36f)
             );
+            addressBarBtn.gameObject.name = "Android_Chrome_AddressBar";
+            var chromeCol = addressBarBtn.GetComponent<BoxCollider>();
+            if (chromeCol != null)
+            {
+                chromeCol.size = new Vector3(0.70f, 0.062f, 0.08f);
+                chromeCol.center = new Vector3(0, 0, -0.01f);
+            }
 
             // Action Buttons beside address bar
             CreateButton("🔍 Go", new Vector3(0.16f, 0.33f, -0.025f), new Vector2(0.09f, 0.060f), parent, () => SubmitSearchQuery(searchInputBuffer), new Color(0.15f, 0.85f, 0.45f));

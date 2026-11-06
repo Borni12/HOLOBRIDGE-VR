@@ -57,6 +57,10 @@ namespace OmniOS.Interaction
             var colliders = chassis.GetComponents<Collider>();
             foreach (var c in colliders) DestroyImmediate(c);
 
+            var chassisCol = chassis.AddComponent<BoxCollider>();
+            chassisCol.size = new Vector3(1.48f, 0.54f, 0.02f);
+            chassisCol.center = Vector3.zero;
+
             Material glassMat = SpatialTheme.CreateGlassMaterial(
                 new Color(0.04f, 0.07f, 0.12f, 0.94f),
                 new Color(0.0f, 0.75f, 1.0f, 0.90f)

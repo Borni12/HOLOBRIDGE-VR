@@ -515,26 +515,44 @@ namespace OmniOS.Interaction
 
             if (hitCount > 0)
             {
-                // Pass 1: Prioritize interactive targets (buttons, sliders, window header/handles)
+                // Pass 0: Ultimate priority for Search Bar, Address Bar, and Virtual Keyboard Keys
                 int bestIndex = -1;
                 float bestDist = float.MaxValue;
                 for (int i = 0; i < hitCount; i++)
                 {
                     var colGo = raycastHits[i].collider.gameObject;
-                    if (colGo.GetComponentInParent<SpatialButton3D>() != null ||
-                        colGo.GetComponentInParent<SpatialSlider3D>() != null ||
-                        colGo.name.Contains("Window_Btn") ||
-                        colGo.name.Contains("GrabBar") ||
-                        colGo.name.Contains("Camera_Viewfinder") ||
-                        colGo.name.Contains("CameraApp_LiveScreen") ||
-                        colGo.name.Contains("YouTube_Screen_Display") ||
-                        colGo.name.Contains("Chrome_Viewport") ||
-                        colGo.name.Contains("Tablet_Screen_Backdrop"))
+                    if (colGo.name.Contains("SearchBar") || colGo.name.Contains("AddressBar") || colGo.name.Contains("VRKey"))
                     {
                         if (raycastHits[i].distance < bestDist)
                         {
                             bestDist = raycastHits[i].distance;
                             bestIndex = i;
+                        }
+                    }
+                }
+
+                // Pass 1: Prioritize interactive targets (buttons, sliders, window header/handles)
+                if (bestIndex < 0)
+                {
+                    for (int i = 0; i < hitCount; i++)
+                    {
+                        var colGo = raycastHits[i].collider.gameObject;
+                        if (colGo.GetComponentInParent<SpatialButton3D>() != null ||
+                            colGo.GetComponentInParent<SpatialSlider3D>() != null ||
+                            colGo.name.Contains("Window_Btn") ||
+                            colGo.name.Contains("GrabBar") ||
+                            colGo.name.Contains("Camera_Viewfinder") ||
+                            colGo.name.Contains("CameraApp_LiveScreen") ||
+                            colGo.name.Contains("YouTube_Screen_Display") ||
+                            colGo.name.Contains("Chrome_Viewport") ||
+                            colGo.name.Contains("VR_Keyboard") ||
+                            colGo.name.Contains("Tablet_Screen_Backdrop"))
+                        {
+                            if (raycastHits[i].distance < bestDist)
+                            {
+                                bestDist = raycastHits[i].distance;
+                                bestIndex = i;
+                            }
                         }
                     }
                 }
@@ -569,6 +587,10 @@ namespace OmniOS.Interaction
                                                   CurrentHitObject.GetComponentInParent<SpatialSlider3D>() != null ||
                                                   CurrentHitObject.name.Contains("Window_Btn") ||
                                                   CurrentHitObject.name.Contains("GrabBar") ||
+                                                  CurrentHitObject.name.Contains("SearchBar") ||
+                                                  CurrentHitObject.name.Contains("AddressBar") ||
+                                                  CurrentHitObject.name.Contains("VRKey") ||
+                                                  CurrentHitObject.name.Contains("VR_Keyboard") ||
                                                   CurrentHitObject.name.Contains("YouTube_Screen_Display") ||
                                                   CurrentHitObject.name.Contains("Chrome_Viewport") ||
                                                   CurrentHitObject.name.Contains("Tablet_Screen_Backdrop"));
@@ -657,7 +679,16 @@ namespace OmniOS.Interaction
                     var mediaApp = CurrentHitObject.GetComponentInParent<OmniOS.Apps.MediaHub.OmniAppMediaHub>();
                     if (mediaApp != null)
                     {
-                        if (hitName.Contains("YouTube_Screen_Display"))
+                        if (hitName.Contains("SearchBar") || hitName.Contains("AddressBar"))
+                        {
+                            if (mediaApp.CurrentTab == OmniOS.Apps.MediaHub.OmniAppMediaHub.HubTab.HomeScreen)
+                            {
+                                mediaApp.SwitchTab(OmniOS.Apps.MediaHub.OmniAppMediaHub.HubTab.ChromeBrowser);
+                            }
+                            mediaApp.ActivateSearchInput();
+                            TriggerHaptic(0.5f, 0.03f);
+                        }
+                        else if (hitName.Contains("YouTube_Screen_Display"))
                         {
                             mediaApp.ToggleYouTubePlay();
                             TriggerHaptic(0.5f, 0.03f);
@@ -713,13 +744,25 @@ namespace OmniOS.Interaction
 
                         foreach (var dh in directHits)
                         {
-                            var b = dh.collider.GetComponentInParent<SpatialButton3D>();
-                            if (b != null)
+                            if (dh.collider.name.Contains("SearchBar") || dh.collider.name.Contains("AddressBar") || dh.collider.name.Contains("VRKey"))
                             {
-                                directBtn = b;
+                                var b = dh.collider.GetComponentInParent<SpatialButton3D>();
+                                if (b != null)
+                                {
+                                    directBtn = b;
+                                    break;
+                                }
+                            }
+
+                            var b2 = dh.collider.GetComponentInParent<SpatialButton3D>();
+                            if (b2 != null && directBtn == null)
+                            {
+                                directBtn = b2;
                                 break;
                             }
-                            if (specialHit == null && (dh.collider.name.Contains("YouTube_Screen_Display") ||
+                            if (specialHit == null && (dh.collider.name.Contains("SearchBar") ||
+                                                       dh.collider.name.Contains("AddressBar") ||
+                                                       dh.collider.name.Contains("YouTube_Screen_Display") ||
                                                        dh.collider.name.Contains("Camera_Viewfinder") ||
                                                        dh.collider.name.Contains("CameraApp_LiveScreen") ||
                                                        dh.collider.name.Contains("Chrome_Viewport") ||
@@ -738,7 +781,19 @@ namespace OmniOS.Interaction
                         else if (specialHit != null)
                         {
                             var mediaApp = specialHit.GetComponentInParent<OmniOS.Apps.MediaHub.OmniAppMediaHub>();
-                            if (specialHit.name.Contains("YouTube_Screen_Display"))
+                            if (specialHit.name.Contains("SearchBar") || specialHit.name.Contains("AddressBar"))
+                            {
+                                if (mediaApp != null)
+                                {
+                                    if (mediaApp.CurrentTab == OmniOS.Apps.MediaHub.OmniAppMediaHub.HubTab.HomeScreen)
+                                    {
+                                        mediaApp.SwitchTab(OmniOS.Apps.MediaHub.OmniAppMediaHub.HubTab.ChromeBrowser);
+                                    }
+                                    mediaApp.ActivateSearchInput();
+                                    TriggerHaptic(0.5f, 0.03f);
+                                }
+                            }
+                            else if (specialHit.name.Contains("YouTube_Screen_Display"))
                             {
                                 if (mediaApp != null)
                                 {
