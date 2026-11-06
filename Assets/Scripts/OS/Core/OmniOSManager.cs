@@ -105,7 +105,7 @@ namespace OmniOS.Core
                 {
                     if (listeners[i] != null && mCam != null && listeners[i].gameObject != mCam.gameObject)
                     {
-                        listeners[i].enabled = false;
+                        Destroy(listeners[i]);
                     }
                 }
             }

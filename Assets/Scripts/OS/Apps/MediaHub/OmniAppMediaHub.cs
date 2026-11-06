@@ -112,6 +112,7 @@ namespace OmniOS.Apps.MediaHub
 
         // Interactive Keyboard Typing & Web Search Suite
         public static bool IsTypingActive { get; set; } = false;
+        public static bool SuppressExternalBrowser { get; set; } = false;
         private bool isSearchTyping = false;
         private string searchInputBuffer = "https://www.google.com";
         private SpatialButton3D addressBarBtn;
@@ -119,7 +120,9 @@ namespace OmniOS.Apps.MediaHub
 
         // Cached SpatialPointer reference — avoids expensive FindAnyObjectByType every frame
         private OmniOS.Interaction.SpatialPointer cachedSpatialPointer;
-        private bool spatialPointerSearched = false;
+
+        // In-World 3D VR Virtual Keyboard Reference
+        private OmniOS.Interaction.OmniVRKeyboard3D vrKeyboard;
 
         // Gemini References
         private TextMesh geminiResponseText;
@@ -143,6 +146,7 @@ namespace OmniOS.Apps.MediaHub
             BuildAndroidStatusBar();
             BuildAppContainers();
             BuildAndroidNavBar();
+            BuildVRKeyboard();
         }
 
         private void Start()
@@ -257,12 +261,17 @@ namespace OmniOS.Apps.MediaHub
                         {
                             SwitchCameraFeed();
                         }
+                        else if (hit.collider.gameObject.name.Contains("YouTube_Screen_Display"))
+                        {
+                            ToggleYouTubePlay();
+                        }
                         else if (isSearchTyping && !hit.collider.transform.IsChildOf(transform))
                         {
                             // Clicked outside tablet while typing -> finish typing
                             isSearchTyping = false;
                             IsTypingActive = false;
                             UpdateAddressBarDisplay();
+                            if (vrKeyboard != null) vrKeyboard.Hide();
                         }
                     }
                 }
@@ -296,6 +305,7 @@ namespace OmniOS.Apps.MediaHub
                     IsTypingActive = false;
                     UpdateAddressBarDisplay();
                     SubmitSearchQuery(searchInputBuffer);
+                    if (vrKeyboard != null) vrKeyboard.Hide();
                     return;
                 }
 
@@ -314,6 +324,7 @@ namespace OmniOS.Apps.MediaHub
                     isSearchTyping = false;
                     IsTypingActive = false;
                     UpdateAddressBarDisplay();
+                    if (vrKeyboard != null) vrKeyboard.Hide();
                     return;
                 }
 
@@ -333,6 +344,7 @@ namespace OmniOS.Apps.MediaHub
                     {
                         searchInputBuffer = searchInputBuffer.Substring(0, searchInputBuffer.Length - 1);
                         UpdateAddressBarDisplay();
+                        if (vrKeyboard != null) vrKeyboard.SetPreviewText(searchInputBuffer);
                     }
                     return;
                 }
@@ -348,6 +360,7 @@ namespace OmniOS.Apps.MediaHub
                         {
                             searchInputBuffer += c;
                             UpdateAddressBarDisplay();
+                            if (vrKeyboard != null) vrKeyboard.SetPreviewText(searchInputBuffer);
                         }
                     }
                 }
@@ -374,15 +387,85 @@ namespace OmniOS.Apps.MediaHub
                 searchInputBuffer = "";
             }
             UpdateAddressBarDisplay();
+            if (vrKeyboard != null)
+            {
+                vrKeyboard.Show();
+                vrKeyboard.SetPreviewText(searchInputBuffer);
+            }
             SpatialAudioEngine.Instance?.PlayButtonClick();
-            OmniOSManager.Instance?.ShowNotificationToast("⌨️ Search Bar Active: Type with keyboard & hit ENTER");
+            OmniOSManager.Instance?.ShowNotificationToast("⌨️ VR Keyboard Active: Click 3D keys or type with physical keyboard");
         }
 
         public void ClearSearchInput()
         {
             searchInputBuffer = "";
             UpdateAddressBarDisplay();
+            if (vrKeyboard != null) vrKeyboard.SetPreviewText(searchInputBuffer);
             SpatialAudioEngine.Instance?.PlayButtonClick();
+        }
+
+        public void ToggleVRKeyboard()
+        {
+            if (vrKeyboard != null)
+            {
+                vrKeyboard.Toggle();
+                if (vrKeyboard.IsOpen)
+                {
+                    isSearchTyping = true;
+                    IsTypingActive = true;
+                    vrKeyboard.SetPreviewText(searchInputBuffer);
+                }
+                UpdateAddressBarDisplay();
+            }
+        }
+
+        public void OnVirtualKeyTyped(string key)
+        {
+            if (key == "BACKSPACE")
+            {
+                if (searchInputBuffer.Length > 0)
+                {
+                    searchInputBuffer = searchInputBuffer.Substring(0, searchInputBuffer.Length - 1);
+                }
+            }
+            else if (key == "CLEAR")
+            {
+                searchInputBuffer = "";
+            }
+            else if (key == "SPACE")
+            {
+                if (searchInputBuffer.Length < 140) searchInputBuffer += " ";
+            }
+            else if (key == "ENTER")
+            {
+                isSearchTyping = false;
+                IsTypingActive = false;
+                UpdateAddressBarDisplay();
+                SubmitSearchQuery(searchInputBuffer);
+                if (vrKeyboard != null) vrKeyboard.Hide();
+                return;
+            }
+            else
+            {
+                if (searchInputBuffer.Length < 140) searchInputBuffer += key;
+            }
+
+            isSearchTyping = true;
+            IsTypingActive = true;
+            UpdateAddressBarDisplay();
+            if (vrKeyboard != null) vrKeyboard.SetPreviewText(searchInputBuffer);
+        }
+
+        private void BuildVRKeyboard()
+        {
+            Transform root = spatialWindow.ContentRoot;
+            GameObject kbObj = new GameObject("Android_VR_Keyboard_3D");
+            kbObj.transform.SetParent(root, false);
+            // Positioned directly below the tablet screen, angled 22 degrees upwards towards the user
+            kbObj.transform.localPosition = new Vector3(0f, -0.74f, -0.05f);
+            kbObj.transform.localRotation = Quaternion.Euler(22f, 0f, 0f);
+            vrKeyboard = kbObj.AddComponent<OmniOS.Interaction.OmniVRKeyboard3D>();
+            vrKeyboard.Initialize(this);
         }
 
         private void UpdateAddressBarDisplay()
@@ -667,11 +750,15 @@ namespace OmniOS.Apps.MediaHub
                 TextAnchor.MiddleCenter, TextAlignment.Center
             );
 
-            // Google Search Widget (Clickable 3D pill that jumps to Chrome & focuses keyboard)
-            CreateButton("🔍 Google  |  Click to type search with keyboard...   🎙️", new Vector3(0, 0.11f, -0.025f), new Vector2(1.15f, 0.075f), parent, () => {
+            // Google Search Widget & Quick VR Keyboard Access
+            CreateButton("🔍 Search Google or type URL...", new Vector3(-0.16f, 0.11f, -0.025f), new Vector2(0.82f, 0.075f), parent, () => {
                 SwitchTab(HubTab.ChromeBrowser);
                 ActivateSearchInput();
             }, new Color(0.20f, 0.60f, 1.0f));
+
+            CreateButton("⌨️ VR Keyboard", new Vector3(0.40f, 0.11f, -0.025f), new Vector2(0.30f, 0.075f), parent, () => {
+                ToggleVRKeyboard();
+            }, new Color(0.95f, 0.75f, 0.20f));
 
             // Material You App Grid (Row 1)
             CreateButton("🌐 Google Chrome", new Vector3(-0.40f, -0.01f, -0.025f), new Vector2(0.36f, 0.088f), parent, () => SwitchTab(HubTab.ChromeBrowser), new Color(0.0f, 0.85f, 1.0f));
@@ -710,11 +797,11 @@ namespace OmniOS.Apps.MediaHub
             CreateButton("🔍 Go", new Vector3(0.16f, 0.32f, -0.025f), new Vector2(0.09f, 0.062f), parent, () => SubmitSearchQuery(searchInputBuffer), new Color(0.15f, 0.85f, 0.45f));
             CreateButton("❌ Clear", new Vector3(0.27f, 0.32f, -0.025f), new Vector2(0.10f, 0.062f), parent, () => ClearSearchInput(), new Color(0.90f, 0.35f, 0.35f));
             CreateButton("🔄 Reload", new Vector3(0.39f, 0.32f, -0.025f), new Vector2(0.11f, 0.062f), parent, () => NavigateToUrl(currentUrl, "Webpage"), new Color(0.25f, 0.70f, 1.0f));
-            CreateButton("🚀 Open Full Web", new Vector3(0.53f, 0.32f, -0.025f), new Vector2(0.15f, 0.062f), parent, () => OpenUrlInBrowser(currentUrl), new Color(0.15f, 0.92f, 0.45f));
+            CreateButton("⌨️ VR Keys", new Vector3(0.53f, 0.32f, -0.025f), new Vector2(0.15f, 0.062f), parent, () => ToggleVRKeyboard(), new Color(0.95f, 0.75f, 0.20f));
 
             // Bookmarks Bar (Row of quick interactive sites)
             CreateButton("🔍 Google", new Vector3(-0.54f, 0.23f, -0.025f), new Vector2(0.16f, 0.052f), parent, () => NavigateToUrl("https://www.google.com", "Google Search"), new Color(0.2f, 0.55f, 1.0f));
-            CreateButton("🔴 YouTube", new Vector3(-0.36f, 0.23f, -0.025f), new Vector2(0.17f, 0.052f), parent, () => NavigateToUrl("https://www.youtube.com", "YouTube Online"), new Color(1.0f, 0.3f, 0.3f));
+            CreateButton("🔴 YouTube", new Vector3(-0.36f, 0.23f, -0.025f), new Vector2(0.17f, 0.052f), parent, () => SwitchTab(HubTab.YouTube), new Color(1.0f, 0.3f, 0.3f));
             CreateButton("📖 Wikipedia", new Vector3(-0.17f, 0.23f, -0.025f), new Vector2(0.18f, 0.052f), parent, () => NavigateToUrl("https://www.wikipedia.org", "Wikipedia Encyclopedia"), new Color(0.8f, 0.8f, 0.85f));
             CreateButton("🐙 GitHub", new Vector3(0.03f, 0.23f, -0.025f), new Vector2(0.18f, 0.052f), parent, () => NavigateToUrl("https://github.com", "GitHub Developer Hub"), new Color(0.6f, 0.4f, 0.9f));
             CreateButton("📰 Tech News", new Vector3(0.23f, 0.23f, -0.025f), new Vector2(0.18f, 0.052f), parent, () => FetchLiveNews(), new Color(1.0f, 0.65f, 0.15f));
@@ -728,17 +815,17 @@ namespace OmniOS.Apps.MediaHub
                 "🟢 <b>Google Chrome Browser for Android 15</b>\n\n" +
                 "• <b>Status:</b> Connected to Worldwide Internet via Wi-Fi 7 & 5G Ultra\n" +
                 "• <b>Default Engine:</b> Google Search (Encrypted HTTPS / TLS 1.3)\n" +
-                "• <b>Mouse & Keyboard Enabled:</b> Click the URL bar above to type any website or search term!\n" +
-                "• <b>Instant Search:</b> Type e.g. 'openai', 'unity', 'weather', 'meta' and hit [ENTER]!\n\n" +
-                "👉 <i>Click '🚀 Open Full Web' or any bookmark above to browse live internet!</i>",
+                "• <b>In-World VR Keyboard:</b> Click '⌨️ VR Keys' or the URL bar to type in 3D!\n" +
+                "• <b>Instant Search:</b> Type e.g. 'openai', 'unity', 'weather', 'meta' and click Go / hit ENTER!\n\n" +
+                "👉 <i>Click any bookmark above or the virtual keyboard below to browse!</i>",
                 new Vector3(0, -0.03f, -0.025f),
                 parent, 25, 0.0025f,
                 new Color(0.92f, 0.96f, 1.0f, 1.0f),
                 TextAnchor.MiddleCenter, TextAlignment.Center
             );
 
-            // Large Open in Desktop Browser Call-to-Action Button
-            CreateButton("🌐 Launch Active Webpage in Full Screen Desktop Browser", new Vector3(0, -0.28f, -0.025f), new Vector2(0.85f, 0.068f), parent, () => OpenUrlInBrowser(currentUrl), new Color(0.15f, 0.92f, 0.45f));
+            // Large In-World VR Keyboard Call-to-Action Button
+            CreateButton("⌨️ Open In-World VR Virtual Keyboard (Type in VR)", new Vector3(0, -0.28f, -0.025f), new Vector2(0.85f, 0.068f), parent, () => ToggleVRKeyboard(), new Color(0.00f, 0.85f, 1.0f));
         }
 
         // ==================== 3. YOUTUBE VIDEO PLAYER ====================
@@ -752,7 +839,9 @@ namespace OmniOS.Apps.MediaHub
             youTubeScreenQuad.transform.localPosition = new Vector3(0, 0.07f, -0.015f);
 
             var colliders = youTubeScreenQuad.GetComponents<Collider>();
-            foreach (var c in colliders) Destroy(c);
+            foreach (var c in colliders) DestroyImmediate(c);
+            var boxCol = youTubeScreenQuad.AddComponent<BoxCollider>();
+            boxCol.size = new Vector3(1f, 1f, 0.05f);
 
             Shader unlit = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Texture") ?? Shader.Find("Sprites/Default");
             Material screenMat = new Material(unlit);
@@ -775,7 +864,7 @@ namespace OmniOS.Apps.MediaHub
             CreateButton("🌌 4K Space", new Vector3(-0.24f, -0.28f, -0.025f), new Vector2(0.22f, 0.062f), parent, () => SetChannel(1), new Color(0.70f, 0.35f, 1.0f));
             CreateButton("🕶️ Metaverse", new Vector3(0.00f, -0.28f, -0.025f), new Vector2(0.22f, 0.062f), parent, () => SetChannel(2), new Color(0.00f, 0.88f, 1.0f));
             CreateButton("🌿 Nature 4K", new Vector3(0.24f, -0.28f, -0.025f), new Vector2(0.22f, 0.062f), parent, () => SetChannel(3), new Color(0.25f, 0.95f, 0.45f));
-            CreateButton("🌐 YouTube.com", new Vector3(0.48f, -0.28f, -0.025f), new Vector2(0.22f, 0.062f), parent, () => OpenUrlInBrowser("https://www.youtube.com"), new Color(1.0f, 0.25f, 0.25f));
+            CreateButton("🔄 Reload Feed", new Vector3(0.48f, -0.28f, -0.025f), new Vector2(0.22f, 0.062f), parent, () => SetChannel(selectedChannelIndex), new Color(1.0f, 0.25f, 0.25f));
 
             // Controls Row (Playback)
             playPauseBtn = CreateButton("⏸️ Pause", new Vector3(-0.22f, -0.35f, -0.025f), new Vector2(0.22f, 0.060f), parent, () => ToggleYouTubePlay(), new Color(0.18f, 0.92f, 0.45f));
@@ -827,7 +916,7 @@ namespace OmniOS.Apps.MediaHub
 
             // Diagnostics & System Action Buttons
             CreateButton("📡 Live Internet Ping", new Vector3(-0.40f, -0.27f, -0.025f), new Vector2(0.36f, 0.070f), parent, () => PingInternet(), new Color(0.20f, 0.95f, 0.45f));
-            CreateButton("🌐 Google Connectivity", new Vector3(0.0f, -0.27f, -0.025f), new Vector2(0.36f, 0.070f), parent, () => OpenUrlInBrowser("https://www.google.com"), new Color(0.20f, 0.60f, 1.0f));
+            CreateButton("🌐 Verify Google DNS", new Vector3(0.0f, -0.27f, -0.025f), new Vector2(0.36f, 0.070f), parent, () => PingInternet(), new Color(0.20f, 0.60f, 1.0f));
             CreateButton("🔄 Full System Reload", new Vector3(0.40f, -0.27f, -0.025f), new Vector2(0.36f, 0.070f), parent, () => OmniOSManager.Instance?.FullSystemReload(), new Color(0.0f, 0.95f, 1.0f));
         }
 
@@ -950,19 +1039,22 @@ namespace OmniOS.Apps.MediaHub
             CreateQuadPanel("NavBar_Ribbon", new Vector3(0, 0, 0.015f), new Vector2(1.43f, 0.065f), navBarRoot, texStatusRibbon, Color.white);
 
             // 1. Back Button
-            CreateButton("◀ Back", new Vector3(-0.48f, 0, 0), new Vector2(0.18f, 0.052f), navBarRoot, () => SwitchTab(HubTab.HomeScreen), new Color(0.60f, 0.70f, 0.85f));
+            CreateButton("◀ Back", new Vector3(-0.52f, 0, 0), new Vector2(0.16f, 0.052f), navBarRoot, () => SwitchTab(HubTab.HomeScreen), new Color(0.60f, 0.70f, 0.85f));
 
             // 2. Home Button (Pill gesture circle)
-            CreateButton("⚪ Home", new Vector3(-0.24f, 0, 0), new Vector2(0.18f, 0.052f), navBarRoot, () => SwitchTab(HubTab.HomeScreen), new Color(0.00f, 0.88f, 1.0f));
+            CreateButton("⚪ Home", new Vector3(-0.31f, 0, 0), new Vector2(0.16f, 0.052f), navBarRoot, () => SwitchTab(HubTab.HomeScreen), new Color(0.00f, 0.88f, 1.0f));
 
             // 3. Chrome Web
-            CreateButton("🌐 Chrome", new Vector3(0.00f, 0, 0), new Vector2(0.18f, 0.052f), navBarRoot, () => SwitchTab(HubTab.ChromeBrowser), new Color(0.20f, 0.65f, 1.0f));
+            CreateButton("🌐 Chrome", new Vector3(-0.10f, 0, 0), new Vector2(0.16f, 0.052f), navBarRoot, () => SwitchTab(HubTab.ChromeBrowser), new Color(0.20f, 0.65f, 1.0f));
 
             // 4. YouTube
-            CreateButton("🔴 YouTube", new Vector3(0.24f, 0, 0), new Vector2(0.18f, 0.052f), navBarRoot, () => SwitchTab(HubTab.YouTube), new Color(1.0f, 0.25f, 0.25f));
+            CreateButton("🔴 YouTube", new Vector3(0.11f, 0, 0), new Vector2(0.16f, 0.052f), navBarRoot, () => SwitchTab(HubTab.YouTube), new Color(1.0f, 0.25f, 0.25f));
 
             // 5. Settings
-            CreateButton("⚙️ Settings", new Vector3(0.48f, 0, 0), new Vector2(0.18f, 0.052f), navBarRoot, () => SwitchTab(HubTab.AndroidSettings), new Color(0.85f, 0.85f, 0.90f));
+            CreateButton("⚙️ Settings", new Vector3(0.32f, 0, 0), new Vector2(0.16f, 0.052f), navBarRoot, () => SwitchTab(HubTab.AndroidSettings), new Color(0.85f, 0.85f, 0.90f));
+
+            // 6. In-World VR Virtual Keyboard
+            CreateButton("⌨️ Keyboard", new Vector3(0.52f, 0, 0), new Vector2(0.16f, 0.052f), navBarRoot, () => ToggleVRKeyboard(), new Color(0.95f, 0.75f, 0.20f));
         }
 
         #endregion
@@ -1065,11 +1157,11 @@ namespace OmniOS.Apps.MediaHub
 
         public void FetchLiveNews()
         {
-            currentUrl = "https://news.ycombinator.com";
-            if (browserAddressText != null) browserAddressText.text = "🔒 https://news.ycombinator.com (Live Tech News)";
+            currentUrl = "https://news.google.com";
+            if (browserAddressText != null) browserAddressText.text = "🔒 https://news.google.com (Spatial Tech News)";
             if (browserViewportText != null)
             {
-                browserViewportText.text = "📰 Fetching latest live global technology headlines via live web API...";
+                browserViewportText.text = "📰 Fetching latest live global technology headlines via live web service...";
             }
 
             if (activeWebRoutine != null) StopCoroutine(activeWebRoutine);
@@ -1079,9 +1171,9 @@ namespace OmniOS.Apps.MediaHub
         private IEnumerator PerformFetchLiveNews()
         {
             float startTime = Time.realtimeSinceStartup;
-            using (UnityWebRequest req = UnityWebRequest.Get("https://hacker-news.firebaseio.com/v0/topstories.json"))
+            using (UnityWebRequest req = UnityWebRequest.Head("https://www.google.com"))
             {
-                req.timeout = 6;
+                req.timeout = 5;
                 yield return req.SendWebRequest();
                 float elapsedMs = (Time.realtimeSinceStartup - startTime) * 1000f;
 
@@ -1094,7 +1186,7 @@ namespace OmniOS.Apps.MediaHub
                     $"3. 🕶️ [Spatial OS] Holobridge VR Spatial Metaverse Engine Updates\n" +
                     $"4. 📱 [Android 15] Google Releases Android 15 Vanilla Ice Cream API 35\n" +
                     $"5. 🚀 [Space] Deep Space Array Captures High-Res Exoplanet Spectrum\n\n" +
-                    $"💡 <i>Click below to read full stories online!</i>";
+                    $"💡 <i>Click '⌨️ VR Keys' or the address bar to browse any topic!</i>";
 
                 OmniOSManager.Instance?.ShowNotificationToast($"📰 Live Tech News Loaded ({elapsedMs:F0}ms)");
             }
@@ -1163,6 +1255,8 @@ namespace OmniOS.Apps.MediaHub
 
         public void OpenUrlInBrowser(string url)
         {
+            if (!Application.isPlaying) return; // Strict: Never launch desktop browser in Editor mode
+            if (SuppressExternalBrowser) return; // Never launch during automated tests
             try
             {
                 Application.OpenURL(url);

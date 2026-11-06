@@ -472,7 +472,8 @@ namespace OmniOS.Interaction
                         colGo.name.Contains("Window_Btn") ||
                         colGo.name.Contains("GrabBar") ||
                         colGo.name.Contains("Camera_Viewfinder") ||
-                        colGo.name.Contains("CameraApp_LiveScreen"))
+                        colGo.name.Contains("CameraApp_LiveScreen") ||
+                        colGo.name.Contains("YouTube_Screen_Display"))
                     {
                         if (raycastHits[i].distance < bestDist)
                         {
@@ -591,19 +592,31 @@ namespace OmniOS.Interaction
                     pressedButton.OnPointerDown();
                     TriggerHaptic(0.65f, 0.04f);
                 }
-                else if (CurrentHitObject != null && (CurrentHitObject.name.Contains("Camera_Viewfinder") || CurrentHitObject.name.Contains("CameraApp_LiveScreen")))
+                else if (CurrentHitObject != null && (CurrentHitObject.name.Contains("Camera_Viewfinder") || CurrentHitObject.name.Contains("CameraApp_LiveScreen") || CurrentHitObject.name.Contains("YouTube_Screen_Display")))
                 {
-                    var mediaApp = CurrentHitObject.GetComponentInParent<OmniOS.Apps.MediaHub.OmniAppMediaHub>();
-                    if (mediaApp != null)
+                    if (CurrentHitObject.name.Contains("YouTube_Screen_Display"))
                     {
-                        mediaApp.SwitchCameraFeed();
-                        TriggerHaptic(0.5f, 0.03f);
+                        var mediaApp = CurrentHitObject.GetComponentInParent<OmniOS.Apps.MediaHub.OmniAppMediaHub>();
+                        if (mediaApp != null)
+                        {
+                            mediaApp.ToggleYouTubePlay();
+                            TriggerHaptic(0.5f, 0.03f);
+                        }
                     }
-                    var camApp = CurrentHitObject.GetComponentInParent<OmniOS.Apps.CameraApp.OmniAppCamera>();
-                    if (camApp != null)
+                    else
                     {
-                        camApp.ToggleDeviceWebcam();
-                        TriggerHaptic(0.5f, 0.03f);
+                        var mediaApp = CurrentHitObject.GetComponentInParent<OmniOS.Apps.MediaHub.OmniAppMediaHub>();
+                        if (mediaApp != null)
+                        {
+                            mediaApp.SwitchCameraFeed();
+                            TriggerHaptic(0.5f, 0.03f);
+                        }
+                        var camApp = CurrentHitObject.GetComponentInParent<OmniOS.Apps.CameraApp.OmniAppCamera>();
+                        if (camApp != null)
+                        {
+                            camApp.ToggleDeviceWebcam();
+                            TriggerHaptic(0.5f, 0.03f);
+                        }
                     }
                 }
                 else if (!isUsingVR)
@@ -617,6 +630,15 @@ namespace OmniOS.Interaction
                         {
                             directBtn.TriggerClick();
                             TriggerHaptic(0.65f, 0.04f);
+                        }
+                        else if (directHit.collider.name.Contains("YouTube_Screen_Display"))
+                        {
+                            var mediaApp = directHit.collider.GetComponentInParent<OmniOS.Apps.MediaHub.OmniAppMediaHub>();
+                            if (mediaApp != null)
+                            {
+                                mediaApp.ToggleYouTubePlay();
+                                TriggerHaptic(0.5f, 0.03f);
+                            }
                         }
                         else if (directHit.collider.name.Contains("Camera_Viewfinder") || directHit.collider.name.Contains("CameraApp_LiveScreen"))
                         {

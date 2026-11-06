@@ -48,6 +48,9 @@ namespace OmniGenesis.Core
 
         public static bool IsKeyTriggered(KeyCode legacyKey, UnityEngine.InputSystem.Key newKey)
         {
+            // Suspend shortcut processing when user is actively typing in the Android search bar / VR Keyboard
+            if (OmniOS.Apps.MediaHub.OmniAppMediaHub.IsTypingActive) return false;
+
             // 1. Check IMGUI Event Latch (captured within last 0.35s)
             if (lastGuiKeyCode == legacyKey && (Time.unscaledTime - lastGuiKeyTime) < 0.35f)
             {

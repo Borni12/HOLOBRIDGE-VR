@@ -407,7 +407,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8beb0d9bc3db174419a97a708589c5d7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::OmniOS.Interaction.SpatialPointer
-  rightHandTransform: {fileID: 1196304969}
+  rightHandTransform: {fileID: 2779669268269126899}
   headCameraTransform: {fileID: 147816320}
   maxRayDistance: 10
   interactionLayers:
@@ -444,7 +444,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98110d8cfddc94b429deb3067c036919, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::OmniGenesis.Core.OmniGenesis5DExperience
-  headCamera: {fileID: 147816320}
+  headCamera: {fileID: 2779669268269126898}
   pointer: {fileID: 4753891}
   currentStiffness: 1
 --- !u!114 &4753894
@@ -9966,11 +9966,6 @@ MonoBehaviour:
   angularMotionThreshold: 35
   linearMotionThreshold: 1.2
   showOnScreenGui: 0
---- !u!4 &1196304969 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 7277802327528778794, guid: 77e7c27b2c5525e4aa8cc9f99d654486, type: 3}
-  m_PrefabInstance: {fileID: 2779669268269126897}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1198760459
 GameObject:
   m_ObjectHideFlags: 0
@@ -17743,6 +17738,16 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 1196304963}
   m_SourcePrefab: {fileID: 100100000, guid: 77e7c27b2c5525e4aa8cc9f99d654486, type: 3}
+--- !u!4 &2779669268269126898 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 7277802327414017193, guid: 77e7c27b2c5525e4aa8cc9f99d654486, type: 3}
+  m_PrefabInstance: {fileID: 2779669268269126897}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &2779669268269126899 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 7415864066060476448, guid: 77e7c27b2c5525e4aa8cc9f99d654486, type: 3}
+  m_PrefabInstance: {fileID: 2779669268269126897}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &3257631069116033653
 PrefabInstance:
   m_ObjectHideFlags: 0

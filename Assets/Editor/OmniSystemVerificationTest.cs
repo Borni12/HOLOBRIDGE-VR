@@ -15,22 +15,9 @@ namespace OmniOS.EditorTools
     /// Programmatically executes and verifies every single key, button, 5D system, and reload action.
     /// Writes complete verified test report to Assets/BUTTON_TEST_RESULTS.txt and Unity Console.
     /// </summary>
-    [InitializeOnLoad]
     public static class OmniSystemVerificationTest
     {
-        private static bool hasRunOnce = false;
-
-        static OmniSystemVerificationTest()
-        {
-            EditorApplication.delayCall += () =>
-            {
-                if (!hasRunOnce)
-                {
-                    hasRunOnce = true;
-                    RunFullDiagnostic(false);
-                }
-            };
-        }
+        public static bool IsTestRunning { get; set; } = false;
 
         [MenuItem("Holobridge/🧪 Run Full Button & Key Diagnostic Test", false, 0)]
         public static void RunFullDiagnosticFromMenu()
@@ -39,6 +26,21 @@ namespace OmniOS.EditorTools
         }
 
         public static void RunFullDiagnostic(bool showPopup)
+        {
+            IsTestRunning = true;
+            OmniAppMediaHub.SuppressExternalBrowser = true;
+            try
+            {
+                RunFullDiagnosticInternal(showPopup);
+            }
+            finally
+            {
+                IsTestRunning = false;
+                OmniAppMediaHub.SuppressExternalBrowser = false;
+            }
+        }
+
+        private static void RunFullDiagnosticInternal(bool showPopup)
         {
             StringBuilder sb = new StringBuilder();
             sb.AppendLine("================================================================================");
@@ -165,7 +167,13 @@ namespace OmniOS.EditorTools
                         androidHub.SwitchCameraFeed(); // Flip back to Outside World Metaverse Camera
                         androidHub.SwitchTab(OmniAppMediaHub.HubTab.YouTube);
                         androidHub.SwitchTab(OmniAppMediaHub.HubTab.HomeScreen);
-                        AssertTest("Android 15 OS Multi-App & Dual-Camera Verification", true, "Successfully verified Home Screen, Chrome Browser, Settings, Dual-Lens Camera (Front/Rear), YouTube, and Internet ping");
+                        androidHub.ToggleVRKeyboard();
+                        androidHub.OnVirtualKeyTyped("H");
+                        androidHub.OnVirtualKeyTyped("O");
+                        androidHub.OnVirtualKeyTyped("L");
+                        androidHub.OnVirtualKeyTyped("O");
+                        androidHub.ToggleVRKeyboard();
+                        AssertTest("Android 15 OS Multi-App & VR Virtual Keyboard Verification", true, "Successfully verified Home Screen, Chrome Browser, In-World VR Keyboard, Settings, Dual-Lens Camera, YouTube, and Internet ping");
                     }
 
                     osManager.ToggleApp("scenery");
