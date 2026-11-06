@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using OmniOS.Core;
+using OmniOS.Interaction;
 using OmniGenesis.Core;
 
 namespace OmniOS.Core
@@ -233,17 +234,30 @@ namespace OmniOS.Core
             GUI.depth = -10000;
 
             // =========================================================================
-            // 1. DEDICATED TOP-RIGHT FLOATING SIMPLE RELOAD BUTTON (Always Visible)
+            // 1. DEDICATED TOP-RIGHT FLOATING ACTION BUTTONS (Always Visible)
             // =========================================================================
-            float rW = 190f;
-            float rH = 42f;
+            float rW = 180f;
+            float rH = 40f;
             float rx = Screen.width - rW - 14f;
             float ry = 14f;
 
+            // [RELOAD SYSTEM (R)] Button
             GUI.color = new Color(0.0f, 1.0f, 0.85f, 0.98f);
             if (GUI.Button(new Rect(rx, ry, rW, rH), "<b>[RELOAD SYSTEM (R)]</b>", reloadBtnStyle))
             {
                 TriggerReload();
+            }
+
+            // [🥽 VR HEADSET (V)] Button (No Headset Required Simulator)
+            float vrW = 190f;
+            float vrX = rx - vrW - 10f;
+            var vrSimRef = OmniVRHeadsetSimulator.Instance;
+            bool isVrActive = vrSimRef != null && vrSimRef.CurrentMode != OmniVRHeadsetSimulator.VRViewMode.StandardDesktop;
+            GUI.color = isVrActive ? new Color(0.1f, 1.0f, 0.65f, 0.98f) : new Color(0.2f, 0.75f, 1.0f, 0.98f);
+            string topVrBtnLabel = isVrActive ? "<b>[🥽 VR VIEW: ON (V)]</b>" : "<b>[🥽 VR HEADSET (V)]</b>";
+            if (GUI.Button(new Rect(vrX, ry, vrW, rH), topVrBtnLabel, reloadBtnStyle))
+            {
+                ToggleVRHeadsetView();
             }
             GUI.color = Color.white;
 
@@ -268,7 +282,7 @@ namespace OmniOS.Core
             if (!isVisible) return;
 
             float pW = 390f;
-            float pH = isMinimized ? 40f : 396f;
+            float pH = isMinimized ? 40f : 436f;
             float px = 14f;
             float py = 14f;
 
@@ -366,7 +380,17 @@ namespace OmniOS.Core
                 }
                 GUILayout.EndHorizontal();
 
-                // Row 7: Master Reload Action inside Panel
+                // Row 7: VR Headset Simulator View Toggle
+                var vrSim = OmniVRHeadsetSimulator.Instance;
+                bool vrActive = vrSim != null && vrSim.CurrentMode != OmniVRHeadsetSimulator.VRViewMode.StandardDesktop;
+                string vrPanelLabel = vrActive ? "<b>[V] 🥽 VR Headset View: [ACTIVE STEREO]</b>" : "<b>[V] 🥽 Test VR Headset View (No Headset)</b>";
+                GUI.color = vrActive ? new Color(0.1f, 1.0f, 0.65f) : new Color(0.1f, 0.75f, 1.0f);
+                if (GUILayout.Button(vrPanelLabel, appBtnStyle, GUILayout.Height(30)))
+                {
+                    ToggleVRHeadsetView();
+                }
+
+                // Row 8: Master Reload Action inside Panel
                 GUI.color = new Color(0.0f, 1.0f, 0.85f);
                 if (GUILayout.Button("<b>[🔄 FULL SYSTEM RELOAD & RESET (R)]</b>", reloadBtnStyle, GUILayout.Height(34)))
                 {
@@ -375,10 +399,30 @@ namespace OmniOS.Core
                 GUI.color = Color.white;
 
                 GUILayout.Space(2);
-                GUILayout.Label("<color=#7ab0d6><size=10><b>Keys:</b> [1] Tablet | [Tab] Launchpad | [3] Cam | [2] Scene | [P] Peel | [M] Matter | [R] Reload</size></color>", labelStyle);
+                GUILayout.Label("<color=#7ab0d6><size=10><b>Keys:</b> [V] VR Preview | [1] Tablet | [Tab] Launchpad | [3] Cam | [2] Scene | [P] Peel | [M] Matter | [R] Reload</size></color>", labelStyle);
             }
 
             GUILayout.EndArea();
+        }
+
+        public void ToggleVRHeadsetView()
+        {
+            try
+            {
+                if (OmniVRHeadsetSimulator.Instance != null)
+                {
+                    OmniVRHeadsetSimulator.Instance.CycleNextMode();
+                }
+                else
+                {
+                    var sim = UnityEngine.Object.FindAnyObjectByType<OmniVRHeadsetSimulator>();
+                    if (sim != null) sim.CycleNextMode();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Log("[OmniSimpleHUD] VR View note: " + ex.Message);
+            }
         }
 
         // =========================================================================

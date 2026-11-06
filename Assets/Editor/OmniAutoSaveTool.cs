@@ -80,6 +80,29 @@ namespace OmniOS.EditorTools
             win.Show();
         }
 
+        [MenuItem("Holobridge/🥽 Toggle VR Headset Simulator Mode (No Headset) %v", false, 3)]
+        public static void ToggleVRSimulatorFromMenu()
+        {
+            if (Application.isPlaying)
+            {
+                if (OmniVRHeadsetSimulator.Instance != null)
+                {
+                    OmniVRHeadsetSimulator.Instance.CycleNextMode();
+                }
+                else
+                {
+                    var sim = UnityEngine.Object.FindAnyObjectByType<OmniVRHeadsetSimulator>();
+                    if (sim != null) sim.CycleNextMode();
+                }
+            }
+            else
+            {
+                EditorUtility.DisplayDialog("VR Headset Simulator", 
+                    "Press Play in Unity, then press 'V' key or click [🥽 VR Headset View] on screen to test the stereoscopic VR headset dual-eye view without requiring any physical VR headset!", 
+                    "Got It");
+            }
+        }
+
         public static void PerformFullReload(bool showDialog = false)
         {
             OmniSceneSanitizer.SanitizeScene(showDialog);
