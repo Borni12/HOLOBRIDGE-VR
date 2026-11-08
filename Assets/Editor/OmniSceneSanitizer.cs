@@ -69,7 +69,9 @@ namespace OmniOS.EditorTools
                 "[OMNI_EVENTSYSTEM]",
                 "[OMNI_LAUNCHPAD]",
                 "Metaverse_PlatformFloor",
+                "Metaverse_CyberDeck_Floor",
                 "Metaverse_VirtualRoom_Root",
+                "Metaverse_ArchitecturalRoom_Root",
                 "[HOLOBRIDGE_COLLAB_ENGINE]",
                 "HoloBridge_SharedDigitalTwin",
                 "Cue"
@@ -78,7 +80,9 @@ namespace OmniOS.EditorTools
             string[] purgePrefixes = new string[]
             {
                 "Metaverse_Pillar_",
+                "Metaverse_Pylon_",
                 "Metaverse_Platform",
+                "Metaverse_Cyber",
                 "TimeOrb_",
                 "Orb_Ring",
                 "Sophia_",

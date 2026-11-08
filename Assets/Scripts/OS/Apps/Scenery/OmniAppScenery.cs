@@ -52,11 +52,14 @@ namespace OmniOS.Apps.Scenery
             // 3. Sunset Horizon Button
             CreateSceneryButton("🌅 Sunset Horizon", new Vector3(-0.35f, 0.04f, 0), () => SwitchToTheme(MetaverseEnvironmentManager.EnvironmentTheme.SunsetHorizon), new Color(1.0f, 0.58f, 0.15f));
 
-            // 4. Ambient Music Toggle Button
-            droneBtn = CreateSceneryButton("🎵 Ambient Music: OFF", new Vector3(0.35f, 0.04f, 0), () => ToggleAmbientDrone(), new Color(0.2f, 0.9f, 0.5f));
+            // 4. Unity Default Room Button
+            CreateSceneryButton("🏛️ Unity Default Room", new Vector3(0.35f, 0.04f, 0), () => SwitchToTheme(MetaverseEnvironmentManager.EnvironmentTheme.DefaultTemplate), new Color(0.75f, 0.78f, 0.85f));
 
-            // 5. Hide All UI for Pure Scenery
-            CreateSceneryButton("👁️ Hide All UI (Zen Mode)", new Vector3(0, -0.22f, 0), () => OmniOSManager.Instance?.ToggleCleanView(), new Color(0.85f, 0.88f, 0.95f), 0.42f);
+            // 5. Ambient Music Toggle Button
+            droneBtn = CreateSceneryButton("🎵 Ambient Music: OFF", new Vector3(-0.35f, -0.14f, 0), () => ToggleAmbientDrone(), new Color(0.2f, 0.9f, 0.5f));
+
+            // 6. Hide All UI for Pure Scenery
+            CreateSceneryButton("👁️ Hide All UI (Zen Mode)", new Vector3(0.35f, -0.14f, 0), () => OmniOSManager.Instance?.ToggleCleanView(), new Color(0.85f, 0.88f, 0.95f));
         }
 
         private SpatialButton3D CreateSceneryButton(string label, Vector3 localPos, Action onClick, Color accent, float width = 0.32f)

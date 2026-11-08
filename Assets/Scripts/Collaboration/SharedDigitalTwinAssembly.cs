@@ -87,6 +87,9 @@ namespace HoloBridge.Collaboration
             IsXRayMode = !isXRayMode;
         }
 
+        private static SharedDigitalTwinAssembly instance;
+        public static SharedDigitalTwinAssembly Instance => instance;
+
         private Transform assemblyRoot;
         private Material highlightMatCyan;
         private Material highlightMatAmber;
@@ -94,6 +97,7 @@ namespace HoloBridge.Collaboration
 
         private void Awake()
         {
+            instance = this;
             BuildProceduralTurbine();
         }
 

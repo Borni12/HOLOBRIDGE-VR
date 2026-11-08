@@ -31,12 +31,17 @@ namespace OmniOS.Core
         [SerializeField] private OmniOSManager osManager;
 
         // Visuals
+        private GameObject dockFloatingRoot;
         private GameObject dockBackplate;
         private bool isDockVisible = true;
         private Transform buttonsContainer;
 
         private void Awake()
         {
+            // Lock [OMNIOS_CORE] container firmly at origin
+            transform.position = Vector3.zero;
+            transform.rotation = Quaternion.identity;
+
             if (headCamera == null && Camera.main != null)
             {
                 headCamera = Camera.main.transform;
@@ -44,6 +49,14 @@ namespace OmniOS.Core
             if (osManager == null)
             {
                 osManager = UnityEngine.Object.FindAnyObjectByType<OmniOSManager>();
+            }
+
+            // Create dedicated independent floating dock root so [OMNIOS_CORE] is NEVER moved
+            if (dockFloatingRoot == null)
+            {
+                dockFloatingRoot = new GameObject("SpatialDock_FloatingRoot");
+                dockFloatingRoot.transform.SetParent(null, false);
+                dockFloatingRoot.transform.position = new Vector3(0f, 1.35f, 1.25f);
             }
 
             BuildDockChrome();
@@ -55,7 +68,7 @@ namespace OmniOS.Core
             // Curved / Rounded Dock Backplate Quad
             dockBackplate = GameObject.CreatePrimitive(PrimitiveType.Quad);
             dockBackplate.name = "Dock_GlassBackplate";
-            dockBackplate.transform.SetParent(transform, false);
+            dockBackplate.transform.SetParent(dockFloatingRoot.transform, false);
             dockBackplate.transform.localScale = new Vector3(2.05f, 0.19f, 1f);
             dockBackplate.transform.localPosition = Vector3.zero;
 
@@ -75,7 +88,7 @@ namespace OmniOS.Core
         private void Build3DButtons()
         {
             GameObject container = new GameObject("Dock_Buttons_Container");
-            container.transform.SetParent(transform, false);
+            container.transform.SetParent(dockFloatingRoot.transform, false);
             container.transform.localPosition = new Vector3(0, 0, -0.015f);
             buttonsContainer = container.transform;
 
@@ -135,22 +148,26 @@ namespace OmniOS.Core
 
         private void Update()
         {
-            // Smooth ergonomic floating behavior: follows user's position and orientation gently
-            if (headCamera != null && isDockVisible)
+            // Keep [OMNIOS_CORE] locked at origin
+            if (transform.position != Vector3.zero) transform.position = Vector3.zero;
+            if (transform.rotation != Quaternion.identity) transform.rotation = Quaternion.identity;
+
+            // Smooth ergonomic floating behavior: moves dockFloatingRoot instead of [OMNIOS_CORE]
+            if (dockFloatingRoot != null && headCamera != null && isDockVisible)
             {
                 Vector3 forward = headCamera.forward;
                 forward.y = 0;
                 if (forward.sqrMagnitude > 0.01f) forward.Normalize();
 
                 Vector3 targetPos = headCamera.position + forward * dockDistance + Vector3.up * dockHeightOffset;
-                transform.position = Vector3.Lerp(transform.position, targetPos, Time.deltaTime * followDamping);
+                dockFloatingRoot.transform.position = Vector3.Lerp(dockFloatingRoot.transform.position, targetPos, Time.deltaTime * followDamping);
 
-                Vector3 toCam = transform.position - headCamera.position;
+                Vector3 toCam = dockFloatingRoot.transform.position - headCamera.position;
                 if (toCam.sqrMagnitude > 0.04f)
                 {
                     // Tilt slightly up (12 degrees) directly facing user's eyes
                     Quaternion targetRot = Quaternion.LookRotation(toCam.normalized, Vector3.up) * Quaternion.Euler(12f, 0, 0);
-                    transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, Time.deltaTime * (followDamping * 1.5f));
+                    dockFloatingRoot.transform.rotation = Quaternion.Slerp(dockFloatingRoot.transform.rotation, targetRot, Time.deltaTime * (followDamping * 1.5f));
                 }
             }
 
@@ -169,21 +186,21 @@ namespace OmniOS.Core
 
         public void SnapToFront()
         {
-            if (headCamera == null) return;
+            if (headCamera == null || dockFloatingRoot == null) return;
             Vector3 forward = headCamera.forward;
             forward.y = 0;
             if (forward.sqrMagnitude > 0.01f) forward.Normalize();
 
-            transform.position = headCamera.position + forward * dockDistance + Vector3.up * dockHeightOffset;
-            Vector3 toCam = transform.position - headCamera.position;
-            transform.rotation = Quaternion.LookRotation(toCam.normalized, Vector3.up) * Quaternion.Euler(12f, 0, 0);
+            dockFloatingRoot.transform.position = headCamera.position + forward * dockDistance + Vector3.up * dockHeightOffset;
+            Vector3 toCam = dockFloatingRoot.transform.position - headCamera.position;
+            dockFloatingRoot.transform.rotation = Quaternion.LookRotation(toCam.normalized, Vector3.up) * Quaternion.Euler(12f, 0, 0);
             SpatialAudioEngine.Instance?.PlayButtonClick();
         }
 
         public void ToggleVisibility()
         {
             isDockVisible = !isDockVisible;
-            gameObject.SetActive(isDockVisible);
+            if (dockFloatingRoot != null) dockFloatingRoot.SetActive(isDockVisible);
             SpatialAudioEngine.Instance?.PlayButtonClick();
         }
     }

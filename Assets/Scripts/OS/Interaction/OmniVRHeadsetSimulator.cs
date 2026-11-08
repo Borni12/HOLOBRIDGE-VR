@@ -640,7 +640,7 @@ namespace OmniOS.Interaction
             // ==============================================================
             // 1. STEREO HEADSET LENS VIGNETTE MASK (Left Eye & Right Eye)
             // ==============================================================
-            if (currentMode == VRViewMode.StereoHeadsetLens && lensMaskTexture != null)
+            if (currentMode == VRViewMode.StereoHeadsetLens && lensMaskTexture != null && showLensMask)
             {
                 float sw = Screen.width;
                 float sh = Screen.height;
@@ -659,12 +659,15 @@ namespace OmniOS.Interaction
                 }
 
                 // Eye Identifiers & Optics Crosshair (Subtle holographic indicators)
-                GUI.color = new Color(0f, 1f, 0.9f, 0.45f);
-                GUI.Label(new Rect(20, sh - 30, 150, 24), "<b>[L] LEFT EYE (63mm IPD)</b>");
-                GUI.Label(new Rect(eyeW + 20, sh - 30, 150, 24), "<b>[R] RIGHT EYE (63mm IPD)</b>");
-                GUI.color = Color.white;
+                if (showVROverlayInfo)
+                {
+                    GUI.color = new Color(0f, 1f, 0.9f, 0.45f);
+                    GUI.Label(new Rect(20, sh - 30, 150, 24), "<b>[L] LEFT EYE (63mm IPD)</b>");
+                    GUI.Label(new Rect(eyeW + 20, sh - 30, 150, 24), "<b>[R] RIGHT EYE (63mm IPD)</b>");
+                    GUI.color = Color.white;
+                }
             }
-            else if (currentMode == VRViewMode.MonocularGoggles && lensMaskTexture != null)
+            else if (currentMode == VRViewMode.MonocularGoggles && lensMaskTexture != null && showLensMask)
             {
                 // Fullscreen Monocular VR Goggles Vignette
                 GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), lensMaskTexture, ScaleMode.StretchToFill);

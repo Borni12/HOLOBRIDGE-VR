@@ -976,6 +976,11 @@ namespace OmniOS.Core
                 if (sceneryApp != null) sceneryApp.SwitchToTheme(MetaverseEnvironmentManager.EnvironmentTheme.SunsetHorizon);
                 else OnAppLaunched("scenery");
             }
+            if (GUILayout.Button("🏛️ Default", btnActionStyle))
+            {
+                if (sceneryApp != null) sceneryApp.SwitchToTheme(MetaverseEnvironmentManager.EnvironmentTheme.DefaultTemplate);
+                else MetaverseEnvironmentManager.Instance?.ApplyTheme(MetaverseEnvironmentManager.EnvironmentTheme.DefaultTemplate);
+            }
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();

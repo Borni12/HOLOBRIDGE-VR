@@ -3,7 +3,9 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using OmniOS.Core;
 using OmniOS.Interaction;
+using OmniOS.Environment;
 using OmniGenesis.Core;
+using HoloBridge.Collaboration;
 
 namespace OmniOS.Core
 {
@@ -282,7 +284,7 @@ namespace OmniOS.Core
             if (!isVisible) return;
 
             float pW = 390f;
-            float pH = isMinimized ? 40f : 436f;
+            float pH = isMinimized ? 40f : 520f;
             float px = 14f;
             float py = 14f;
 
@@ -374,23 +376,50 @@ namespace OmniOS.Core
                     RecenterView();
                 }
                 GUI.color = new Color(0.85f, 0.65f, 1.0f);
-                if (GUILayout.Button("<b>[T] Button Self-Test</b>", appBtnStyle, GUILayout.Height(28)))
+                if (GUILayout.Button("<b>[Self-Test] Verify</b>", appBtnStyle, GUILayout.Height(28)))
                 {
                     RunSelfTest();
                 }
                 GUILayout.EndHorizontal();
 
-                // Row 7: VR Headset Simulator View Toggle
+                // Row 7: Scenery Theme Switcher & Mobile Simulator
+                GUILayout.BeginHorizontal();
+                var envMgr = MetaverseEnvironmentManager.Instance;
+                string themeText = envMgr != null ? envMgr.CurrentTheme.ToString() : "CYBER";
+                GUI.color = new Color(0.3f, 1.0f, 0.8f);
+                if (GUILayout.Button($"<b>[T] 🎨 Theme: {themeText}</b>", appBtnStyle, GUILayout.Height(28)))
+                {
+                    MetaverseEnvironmentManager.Instance?.NextTheme();
+                }
+
+                var hub = HoloBridgeCrossDeviceHub.Instance;
+                bool isMobOpen = hub != null && hub.ShowMobileSimulator;
+                GUI.color = isMobOpen ? new Color(0.1f, 1.0f, 0.5f) : new Color(0.2f, 0.85f, 1.0f);
+                if (GUILayout.Button($"<b>[M] 📱 Mobile Sim: {(isMobOpen ? "ON" : "OFF")}</b>", appBtnStyle, GUILayout.Height(28)))
+                {
+                    if (hub != null) hub.ShowMobileSimulator = !hub.ShowMobileSimulator;
+                }
+                GUILayout.EndHorizontal();
+
+                // Row 8: Cross-Device Role & VR Headset View
+                GUILayout.BeginHorizontal();
+                string curRole = hub != null ? hub.ActiveRole.ToString() : "PC";
+                GUI.color = new Color(1.0f, 0.75f, 0.2f);
+                if (GUILayout.Button($"<b>[F1] Role: {curRole}</b>", appBtnStyle, GUILayout.Height(28)))
+                {
+                    HoloBridgeCrossDeviceHub.Instance?.CycleNextRole();
+                }
+
                 var vrSim = OmniVRHeadsetSimulator.Instance;
                 bool vrActive = vrSim != null && vrSim.CurrentMode != OmniVRHeadsetSimulator.VRViewMode.StandardDesktop;
-                string vrPanelLabel = vrActive ? "<b>[V] 🥽 VR Headset View: [ACTIVE STEREO]</b>" : "<b>[V] 🥽 Test VR Headset View (No Headset)</b>";
                 GUI.color = vrActive ? new Color(0.1f, 1.0f, 0.65f) : new Color(0.1f, 0.75f, 1.0f);
-                if (GUILayout.Button(vrPanelLabel, appBtnStyle, GUILayout.Height(30)))
+                if (GUILayout.Button($"<b>[V] 🥽 VR View: {(vrActive ? "ON" : "OFF")}</b>", appBtnStyle, GUILayout.Height(28)))
                 {
                     ToggleVRHeadsetView();
                 }
+                GUILayout.EndHorizontal();
 
-                // Row 8: Master Reload Action inside Panel
+                // Row 9: Master Reload Action inside Panel
                 GUI.color = new Color(0.0f, 1.0f, 0.85f);
                 if (GUILayout.Button("<b>[🔄 FULL SYSTEM RELOAD & RESET (R)]</b>", reloadBtnStyle, GUILayout.Height(34)))
                 {
@@ -399,7 +428,7 @@ namespace OmniOS.Core
                 GUI.color = Color.white;
 
                 GUILayout.Space(2);
-                GUILayout.Label("<color=#7ab0d6><size=10><b>Keys:</b> [V] VR Preview | [1] Tablet | [Tab] Launchpad | [3] Cam | [2] Scene | [P] Peel | [M] Matter | [R] Reload</size></color>", labelStyle);
+                GUILayout.Label("<color=#7ab0d6><size=10><b>Keys:</b> [T] Theme | [M] Mobile | [F1] Role | [V] VR | [P] Peel | [X] Explode | [R] Reload</size></color>", labelStyle);
             }
 
             GUILayout.EndArea();
