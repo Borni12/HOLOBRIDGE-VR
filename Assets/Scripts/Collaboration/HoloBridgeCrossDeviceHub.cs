@@ -83,23 +83,61 @@ namespace HoloBridge.Collaboration
         private const int StreamWidth = 640;
         private const int StreamHeight = 360;
 
-        // Multi-Participant 3D Avatars
+        // Multi-Participant 3D Avatars with Complete Human Anatomy & Procedural Locomotion
         public class CollaboratorAvatar
         {
             public string clientId;
+            public string id => clientId;
             public string displayName;
             public Color teamColor;
             public DeviceRole role;
             public GameObject rootObj;
-            public Transform headTransform;
+
+            // Core Anatomy Transforms
+            public Transform pelvisTransform;
             public Transform torsoTransform;
-            public Transform rightHandTransform;
+            public Transform chestTransform;
+            public Transform headTransform;
+
+            // Limbs & Joints - Arms
+            public Transform leftShoulderPivot;
+            public Transform leftUpperArm;
+            public Transform leftElbowPivot;
+            public Transform leftForearm;
             public Transform leftHandTransform;
+
+            public Transform rightShoulderPivot;
+            public Transform rightUpperArm;
+            public Transform rightElbowPivot;
+            public Transform rightForearm;
+            public Transform rightHandTransform;
+
+            // Limbs & Joints - Legs
+            public Transform leftHipPivot;
+            public Transform leftThigh;
+            public Transform leftKneePivot;
+            public Transform leftCalf;
+            public Transform leftFoot;
+
+            public Transform rightHipPivot;
+            public Transform rightThigh;
+            public Transform rightKneePivot;
+            public Transform rightCalf;
+            public Transform rightFoot;
+
+            // Laser Beam & Reticle
             public LineRenderer laserBeam;
             public Transform laserReticle;
             public TextMesh nameTagTextMesh;
             public Vector2 touchCoords = new Vector2(0.5f, 0.5f);
             public Vector3 currentTargetPoint;
+
+            // Procedural Human Locomotion
+            public float walkPhase;
+            public float walkSpeed;
+            public Vector3 lastPosition;
+            public Vector3 moveVelocity;
+            public bool isWalking;
             public float animPhase;
             public float lastActivityTime;
         }
@@ -122,6 +160,18 @@ namespace HoloBridge.Collaboration
 
         private bool isResonanceLocked = false;
         private Vector2 localMobileTouchPos = new Vector2(0.5f, 0.5f);
+
+        public enum PlayerCameraMode
+        {
+            FirstPerson,
+            ThirdPerson,
+            BirdsEye,
+            ArenaOverview
+        }
+
+        [Header("Camera Vantage & Perspectives")]
+        public PlayerCameraMode currentCameraMode = PlayerCameraMode.FirstPerson;
+        private bool isLocalJoined = false;
 
         // GUI Styles
         private GUIStyle phoneFrameStyle;
@@ -165,6 +215,7 @@ namespace HoloBridge.Collaboration
                 return;
             }
             instance = this;
+            gameObject.name = "[HOLOBRIDGE_CROSS_DEVICE_HUB]";
             DontDestroyOnLoad(gameObject);
 
             FindLocalIP();
@@ -174,10 +225,14 @@ namespace HoloBridge.Collaboration
 
         private void Start()
         {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            enableLocalWebServer = false;
+#endif
             if (enableLocalWebServer)
             {
                 StartLocalWebServer();
             }
+            EnsureLocalOperatorJoined();
         }
 
         private void OnDestroy()
@@ -211,16 +266,102 @@ namespace HoloBridge.Collaboration
             latestJpgBytes = streamTexture2D.EncodeToJPG(50);
         }
 
-        private void LateUpdate()
+        [Header("Active Stream Perspective")]
+        [SerializeField] private string streamTargetUserId = "main"; // "main", "arena", or a specific user's clientId
+        public string StreamTargetUserId => streamTargetUserId;
+
+        public void SetStreamTarget(string targetId)
         {
-            // Mirror Main Camera viewpoint for the Web Stream
+            if (string.IsNullOrEmpty(targetId)) targetId = "main";
+            streamTargetUserId = targetId;
+
+            string targetName = targetId switch
+            {
+                "birds_eye" => "🦅 Tactical Bird's Eye View",
+                "topdown" => "🦅 Tactical Bird's Eye View",
+                "arena" => "🌐 Overview Arena Cam",
+                "main" => "🖥️ Host Main Cam",
+                _ => participants.TryGetValue(targetId, out var av) ? av.displayName : targetId
+            };
+
+            OmniOSManager.Instance?.ShowNotificationToast($"📹 Stream Perspective: {targetName}");
+            SpatialAudioEngine.Instance?.PlayHoverTick();
+        }
+
+        private void UpdateStreamCameraPerspective()
+        {
+            if (streamCamera == null) return;
+
             Camera mainCam = Camera.main;
-            if (mainCam != null && streamCamera != null)
+
+            if (streamTargetUserId == "birds_eye" || streamTargetUserId == "topdown")
+            {
+                // Overhead Tactical Bird's-Eye View looking down over entire room and all participants
+                Vector3 birdsEyePos = new Vector3(0f, 6.8f, -0.6f);
+                Vector3 birdsEyeLook = new Vector3(0f, 0.7f, 0.8f);
+                streamCamera.transform.position = Vector3.Lerp(streamCamera.transform.position, birdsEyePos, Time.deltaTime * 6f);
+                streamCamera.transform.rotation = Quaternion.Slerp(streamCamera.transform.rotation, Quaternion.LookRotation(birdsEyeLook - streamCamera.transform.position), Time.deltaTime * 6f);
+                streamCamera.fieldOfView = 75f;
+                return;
+            }
+
+            if (streamTargetUserId == "arena")
+            {
+                // Cinematic Wide-Angle Arena Cam
+                Vector3 arenaCamPos = new Vector3(0f, 3.2f, -2.85f);
+                Vector3 arenaLookTarget = new Vector3(0f, 1.30f, 0f);
+                streamCamera.transform.position = Vector3.Lerp(streamCamera.transform.position, arenaCamPos, Time.deltaTime * 6f);
+                streamCamera.transform.rotation = Quaternion.Slerp(streamCamera.transform.rotation, Quaternion.LookRotation((arenaLookTarget - streamCamera.transform.position).normalized), Time.deltaTime * 6f);
+                streamCamera.fieldOfView = 65f;
+                return;
+            }
+
+            // Check if targeting a specific participant avatar
+            if (!string.IsNullOrEmpty(streamTargetUserId) && streamTargetUserId != "main")
+            {
+                lock (participantsLock)
+                {
+                    if (participants.TryGetValue(streamTargetUserId, out CollaboratorAvatar targetAv) && targetAv != null && targetAv.rootObj != null)
+                    {
+                        // Over-the-shoulder third-person camera looking past avatar towards their aim point
+                        Vector3 rootPos = targetAv.rootObj.transform.position;
+                        Vector3 shoulderOffset = targetAv.rootObj.transform.up * 1.55f 
+                                               - targetAv.rootObj.transform.forward * 0.95f 
+                                               + targetAv.rootObj.transform.right * 0.35f;
+                        Vector3 desiredPos = rootPos + shoulderOffset;
+                        Vector3 lookTarget = targetAv.currentTargetPoint != Vector3.zero 
+                                           ? targetAv.currentTargetPoint 
+                                           : (rootPos + targetAv.rootObj.transform.forward * 5f + Vector3.up * 1.3f);
+
+                        streamCamera.transform.position = Vector3.Lerp(streamCamera.transform.position, desiredPos, Time.deltaTime * 8f);
+                        Vector3 toLook = (lookTarget - streamCamera.transform.position).normalized;
+                        if (toLook.sqrMagnitude > 0.001f)
+                        {
+                            streamCamera.transform.rotation = Quaternion.Slerp(streamCamera.transform.rotation, Quaternion.LookRotation(toLook), Time.deltaTime * 8f);
+                        }
+                        streamCamera.fieldOfView = 62f;
+                        return;
+                    }
+                }
+            }
+
+            // Default: Mirror Main Host Camera
+            if (mainCam != null)
             {
                 streamCamera.transform.position = mainCam.transform.position;
                 streamCamera.transform.rotation = mainCam.transform.rotation;
                 streamCamera.fieldOfView = mainCam.fieldOfView;
             }
+        }
+
+        private void LateUpdate()
+        {
+            UpdatePlayerCameraView();
+            UpdateStreamCameraPerspective();
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+            return;
+#endif
 
             // Capture frame at ~25 FPS
             frameCaptureTimer += Time.deltaTime;
@@ -256,41 +397,217 @@ namespace HoloBridge.Collaboration
             avatarsRoot = new GameObject("CrossDevice_Avatars_Root");
             avatarsRoot.transform.SetParent(transform, false);
 
-            // 1. PC Collaborator Avatar (Amber Cyberpunk Architect)
-            pcAvatar = CreateHumanoidAvatar(
-                "pc_core",
-                "🖥️ PC Macro-CAD Inspector",
-                colorPC,
-                DeviceRole.DesktopPC,
-                new Vector3(1.10f, 0f, -0.65f),
-                Quaternion.Euler(0f, -35f, 0f)
-            );
-            participants["pc_core"] = pcAvatar;
+            lock (participantsLock)
+            {
+                participants.Clear();
+            }
 
-            // 2. VR Collaborator Avatar (Cyan Quest Operator)
-            vrAvatar = CreateHumanoidAvatar(
-                "vr_core",
-                "🥽 VR Lead Operator",
-                colorVR,
-                DeviceRole.VRHeadset,
-                new Vector3(-1.10f, 0f, -0.65f),
-                Quaternion.Euler(0f, 35f, 0f)
-            );
-            participants["vr_core"] = vrAvatar;
-
-            // 3. Primary Mobile Collaborator (Emerald Green)
-            primaryMobileAvatar = CreateHumanoidAvatar(
-                "mobile_primary",
-                "📱 Mobile Collaborator #1",
-                colorMobile,
-                DeviceRole.MobileTablet,
-                new Vector3(0.0f, 0f, -0.95f),
-                Quaternion.Euler(0f, 0f, 0f)
-            );
-            participants["mobile_primary"] = primaryMobileAvatar;
-
-            // 4. In-World 3D Live Collaborator Scoreboard (Active User Count)
+            // In-World 3D Live Collaborator Scoreboard (Active User Count starts strictly at 0)
             BuildInWorldCollaboratorBoard();
+        }
+
+        public string GetLocalOperatorId()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            return "web_local";
+#elif UNITY_ANDROID || UNITY_IOS
+            return "vr_local";
+#else
+            return activeRole == DeviceRole.VRHeadset ? "vr_local" : "pc_local";
+#endif
+        }
+
+        public void EnsureLocalOperatorJoined()
+        {
+            string localId = GetLocalOperatorId();
+            lock (participantsLock)
+            {
+                if (participants.ContainsKey(localId)) return;
+            }
+
+            string localName = "🖥️ PC Inspector";
+            Color localColor = colorPC;
+            DeviceRole localRole = DeviceRole.DesktopPC;
+            Vector3 spawnPos = new Vector3(0.9f, 0f, -1.1f);
+            Quaternion spawnRot = Quaternion.Euler(0f, -25f, 0f);
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+            localName = "🌐 Web Operator";
+            localColor = new Color(0.0f, 0.95f, 0.75f);
+            localRole = DeviceRole.DesktopPC;
+            spawnPos = new Vector3(0f, 0f, -1.25f);
+            spawnRot = Quaternion.identity;
+#elif UNITY_ANDROID || UNITY_IOS
+            localName = "🥽 VR Lead Operator";
+            localColor = colorVR;
+            localRole = DeviceRole.VRHeadset;
+            spawnPos = new Vector3(-0.9f, 0f, -1.1f);
+            spawnRot = Quaternion.Euler(0f, 25f, 0f);
+#else
+            if (activeRole == DeviceRole.VRHeadset)
+            {
+                localName = "🥽 VR Lead Operator";
+                localColor = colorVR;
+                localRole = DeviceRole.VRHeadset;
+                spawnPos = new Vector3(-0.9f, 0f, -1.1f);
+                spawnRot = Quaternion.Euler(0f, 25f, 0f);
+            }
+            else
+            {
+                localName = "🖥️ PC Inspector";
+                localColor = colorPC;
+                localRole = DeviceRole.DesktopPC;
+                spawnPos = new Vector3(0.9f, 0f, -1.1f);
+                spawnRot = Quaternion.Euler(0f, -25f, 0f);
+            }
+#endif
+
+            var av = CreateHumanoidAvatar(localId, localName, localColor, localRole, spawnPos, spawnRot);
+            lock (participantsLock)
+            {
+                participants[localId] = av;
+            }
+            if (localRole == DeviceRole.VRHeadset) vrAvatar = av;
+            else pcAvatar = av;
+
+            isLocalJoined = true;
+            OmniOSManager.Instance?.ShowNotificationToast($"👥 Joined Scene: {localName} (Articulated Humanoid Avatar Active)!");
+        }
+
+        public void JoinAsLocalOperator()
+        {
+            EnsureLocalOperatorJoined();
+            SpatialAudioEngine.Instance?.PlayThemeChime();
+        }
+
+        public void SetCameraMode(PlayerCameraMode mode)
+        {
+            currentCameraMode = mode;
+            string modeName = currentCameraMode switch
+            {
+                PlayerCameraMode.BirdsEye => "🦅 BIRD'S EYE VIEW (High Overhead View)",
+                PlayerCameraMode.ThirdPerson => "👤 THIRD-PERSON VIEW (Avatar Tracking)",
+                PlayerCameraMode.ArenaOverview => "🌐 ARENA OVERVIEW (Cinematic Cam)",
+                _ => "🖥️ FIRST-PERSON VIEW (Eye-Level)"
+            };
+
+            OmniOSManager.Instance?.ShowNotificationToast($"📹 View: {modeName}");
+            SpatialAudioEngine.Instance?.PlayHoverTick();
+        }
+
+        public void ToggleBirdsEyeView()
+        {
+            if (currentCameraMode == PlayerCameraMode.BirdsEye)
+            {
+                SetCameraMode(PlayerCameraMode.FirstPerson);
+            }
+            else
+            {
+                SetCameraMode(PlayerCameraMode.BirdsEye);
+            }
+        }
+
+        public void ToggleThirdPersonView()
+        {
+            if (currentCameraMode == PlayerCameraMode.ThirdPerson)
+            {
+                SetCameraMode(PlayerCameraMode.FirstPerson);
+            }
+            else
+            {
+                SetCameraMode(PlayerCameraMode.ThirdPerson);
+            }
+        }
+
+        private void UpdatePlayerCameraView()
+        {
+            Camera cam = Camera.main;
+            if (cam == null)
+            {
+                var all = Camera.allCameras;
+                for (int i = 0; i < all.Length; i++)
+                {
+                    if (all[i] != streamCamera && all[i].targetTexture == null)
+                    {
+                        cam = all[i];
+                        break;
+                    }
+                }
+            }
+            if (cam == null) return;
+
+            string localId = GetLocalOperatorId();
+            CollaboratorAvatar localAv = null;
+            lock (participantsLock)
+            {
+                participants.TryGetValue(localId, out localAv);
+                if (localAv == null || localAv.rootObj == null)
+                {
+                    localAv = pcAvatar ?? vrAvatar;
+                }
+                if (localAv == null || localAv.rootObj == null)
+                {
+                    foreach (var p in participants.Values)
+                    {
+                        if (p != null && p.rootObj != null)
+                        {
+                            localAv = p;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            Vector3 focusPos = (localAv != null && localAv.rootObj != null) ? localAv.rootObj.transform.position : Vector3.zero;
+            Vector3 fwd = (localAv != null && localAv.rootObj != null) ? localAv.rootObj.transform.forward : Vector3.forward;
+
+            if (currentCameraMode == PlayerCameraMode.BirdsEye)
+            {
+                // Dynamic Bird's Eye View: Tracks player from high altitude (Y = 7.5m) looking down
+                Vector3 birdsEyePos = focusPos + Vector3.up * 7.5f - Vector3.forward * 1.6f;
+                Vector3 birdsEyeLook = focusPos + Vector3.up * 0.4f;
+                cam.transform.position = Vector3.Lerp(cam.transform.position, birdsEyePos, Time.deltaTime * 8f);
+                Vector3 lookDir = (birdsEyeLook - cam.transform.position).normalized;
+                if (lookDir.sqrMagnitude > 0.001f)
+                {
+                    cam.transform.rotation = Quaternion.Slerp(cam.transform.rotation, Quaternion.LookRotation(lookDir), Time.deltaTime * 8f);
+                }
+                cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, 75f, Time.deltaTime * 6f);
+            }
+            else if (currentCameraMode == PlayerCameraMode.ThirdPerson)
+            {
+                // Dynamic Third-Person View: Follows right behind the avatar
+                Vector3 desiredPos = focusPos - fwd * 2.6f + Vector3.up * 1.85f;
+                Vector3 lookTarget = focusPos + Vector3.up * 1.30f;
+
+                cam.transform.position = Vector3.Lerp(cam.transform.position, desiredPos, Time.deltaTime * 9f);
+                Vector3 lookDir = (lookTarget - cam.transform.position).normalized;
+                if (lookDir.sqrMagnitude > 0.001f)
+                {
+                    cam.transform.rotation = Quaternion.Slerp(cam.transform.rotation, Quaternion.LookRotation(lookDir), Time.deltaTime * 9f);
+                }
+                cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, 65f, Time.deltaTime * 6f);
+            }
+            else if (currentCameraMode == PlayerCameraMode.ArenaOverview)
+            {
+                // Static/Cinematic Arena Overview
+                Vector3 arenaPos = new Vector3(0f, 3.8f, -3.4f);
+                Vector3 arenaLook = new Vector3(0f, 1.2f, 0f);
+                cam.transform.position = Vector3.Lerp(cam.transform.position, arenaPos, Time.deltaTime * 6f);
+                cam.transform.rotation = Quaternion.Slerp(cam.transform.rotation, Quaternion.LookRotation(arenaLook - cam.transform.position), Time.deltaTime * 6f);
+                cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, 68f, Time.deltaTime * 6f);
+            }
+            else if (currentCameraMode == PlayerCameraMode.FirstPerson)
+            {
+                // First-Person Eye Level View
+                Vector3 eyePos = focusPos + Vector3.up * 1.62f;
+                cam.transform.position = Vector3.Lerp(cam.transform.position, eyePos, Time.deltaTime * 8f);
+                if (fwd.sqrMagnitude > 0.001f)
+                {
+                    cam.transform.rotation = Quaternion.Slerp(cam.transform.rotation, Quaternion.LookRotation(fwd), Time.deltaTime * 8f);
+                }
+                cam.fieldOfView = Mathf.Lerp(cam.fieldOfView, 60f, Time.deltaTime * 6f);
+            }
         }
 
         private void BuildInWorldCollaboratorBoard()
@@ -328,20 +645,20 @@ namespace HoloBridge.Collaboration
             var frameMat = new Material(unlitShader) { color = new Color(0.0f, 0.85f, 1.0f, 1.0f) };
             frame.GetComponent<MeshRenderer>().material = frameMat;
 
-            // Title TextMesh
+            // Title TextMesh (Starts strictly at 0)
             GameObject titleObj = new GameObject("TitleLabel");
             titleObj.transform.SetParent(collaboratorBoardRoot.transform, false);
             titleObj.transform.localPosition = new Vector3(0f, 0.09f, -0.015f);
             titleObj.transform.localScale = Vector3.one * 0.015f;
 
             boardTitleTextMesh = titleObj.AddComponent<TextMesh>();
-            boardTitleTextMesh.text = "👥 ACTIVE COLLABORATORS: 3";
+            boardTitleTextMesh.text = "👥 ACTIVE OPERATORS: 0";
             boardTitleTextMesh.fontSize = 26;
             boardTitleTextMesh.characterSize = 1f;
             boardTitleTextMesh.anchor = TextAnchor.MiddleCenter;
             boardTitleTextMesh.alignment = TextAlignment.Center;
             boardTitleTextMesh.fontStyle = FontStyle.Bold;
-            boardTitleTextMesh.color = new Color(0.0f, 1.0f, 0.55f);
+            boardTitleTextMesh.color = new Color(0.35f, 0.75f, 1.0f);
 
             // Details Breakdown TextMesh
             GameObject detailObj = new GameObject("DetailLabel");
@@ -350,12 +667,12 @@ namespace HoloBridge.Collaboration
             detailObj.transform.localScale = Vector3.one * 0.012f;
 
             boardDetailsTextMesh = detailObj.AddComponent<TextMesh>();
-            boardDetailsTextMesh.text = "[ 🥽 VR: 1  |  🖥️ PC: 1  |  📱 Mobile: 1 ]";
-            boardDetailsTextMesh.fontSize = 20;
+            boardDetailsTextMesh.text = "[ Waiting for operators to connect... ]";
+            boardDetailsTextMesh.fontSize = 19;
             boardDetailsTextMesh.characterSize = 1f;
             boardDetailsTextMesh.anchor = TextAnchor.MiddleCenter;
             boardDetailsTextMesh.alignment = TextAlignment.Center;
-            boardDetailsTextMesh.color = new Color(0.80f, 0.95f, 1.0f);
+            boardDetailsTextMesh.color = new Color(0.65f, 0.85f, 1.0f);
         }
 
         public CollaboratorAvatar CreateHumanoidAvatar(string clientId, string name, Color themeColor, DeviceRole role, Vector3 pos, Quaternion rot)
@@ -372,25 +689,61 @@ namespace HoloBridge.Collaboration
             suitMat.color = new Color(0.08f, 0.10f, 0.14f);
             if (suitMat.HasProperty("_BaseColor")) suitMat.SetColor("_BaseColor", new Color(0.08f, 0.10f, 0.14f));
 
+            Material skinMat = new Material(litShader);
+            skinMat.color = new Color(0.92f, 0.76f, 0.65f);
+            if (skinMat.HasProperty("_BaseColor")) skinMat.SetColor("_BaseColor", new Color(0.92f, 0.76f, 0.65f));
+
+            Material armorMat = new Material(litShader);
+            armorMat.color = new Color(0.18f, 0.22f, 0.28f);
+            if (armorMat.HasProperty("_BaseColor")) armorMat.SetColor("_BaseColor", new Color(0.18f, 0.22f, 0.28f));
+
             Material neonMat = new Material(unlitShader) { color = themeColor };
 
             // -------------------------------------------------------------
-            // A. TORSO & CHESTPLATE
+            // 1. PELVIS & HIPS (Center Root of Locomotion)
+            // -------------------------------------------------------------
+            GameObject pelvis = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            pelvis.name = "Pelvis";
+            pelvis.transform.SetParent(root.transform, false);
+            pelvis.transform.localPosition = new Vector3(0f, 0.92f, 0f);
+            pelvis.transform.localScale = new Vector3(0.30f, 0.15f, 0.18f);
+            RemoveCollider(pelvis);
+            pelvis.GetComponent<MeshRenderer>().material = suitMat;
+
+            // Glowing Belt Trim
+            GameObject belt = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            belt.name = "BeltGlow";
+            belt.transform.SetParent(pelvis.transform, false);
+            belt.transform.localPosition = new Vector3(0f, 0.05f, 0f);
+            belt.transform.localScale = new Vector3(1.04f, 0.25f, 1.05f);
+            RemoveCollider(belt);
+            belt.GetComponent<MeshRenderer>().material = neonMat;
+
+            // -------------------------------------------------------------
+            // 2. TORSO, CHEST & PAULDRONS (Spine Chain)
             // -------------------------------------------------------------
             GameObject torso = GameObject.CreatePrimitive(PrimitiveType.Cube);
             torso.name = "Torso";
-            torso.transform.SetParent(root.transform, false);
-            torso.transform.localPosition = new Vector3(0f, 1.05f, 0f);
-            torso.transform.localScale = new Vector3(0.36f, 0.44f, 0.22f);
+            torso.transform.SetParent(pelvis.transform, false);
+            torso.transform.localPosition = new Vector3(0f, 0.18f, 0f);
+            torso.transform.localScale = new Vector3(0.32f, 0.24f, 0.20f);
             RemoveCollider(torso);
             torso.GetComponent<MeshRenderer>().material = suitMat;
 
-            // Glowing team chest emblem
+            GameObject chest = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            chest.name = "Chest";
+            chest.transform.SetParent(torso.transform, false);
+            chest.transform.localPosition = new Vector3(0f, 0.18f, 0f);
+            chest.transform.localScale = new Vector3(1.12f, 1.05f, 1.10f);
+            RemoveCollider(chest);
+            chest.GetComponent<MeshRenderer>().material = armorMat;
+
+            // Chest Emblem
             GameObject emblem = GameObject.CreatePrimitive(PrimitiveType.Cube);
             emblem.name = "ChestEmblem";
-            emblem.transform.SetParent(torso.transform, false);
-            emblem.transform.localPosition = new Vector3(0f, 0.15f, 0.52f);
-            emblem.transform.localScale = new Vector3(0.35f, 0.20f, 0.08f);
+            emblem.transform.SetParent(chest.transform, false);
+            emblem.transform.localPosition = new Vector3(0f, 0.05f, 0.52f);
+            emblem.transform.localScale = new Vector3(0.35f, 0.25f, 0.08f);
             RemoveCollider(emblem);
             emblem.GetComponent<MeshRenderer>().material = neonMat;
 
@@ -398,35 +751,52 @@ namespace HoloBridge.Collaboration
             for (int s = -1; s <= 1; s += 2)
             {
                 GameObject pauldron = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                pauldron.name = s < 0 ? "Shoulder_L" : "Shoulder_R";
-                pauldron.transform.SetParent(root.transform, false);
-                pauldron.transform.localPosition = new Vector3(s * 0.24f, 1.25f, 0f);
-                pauldron.transform.localScale = new Vector3(0.12f, 0.12f, 0.14f);
+                pauldron.name = s < 0 ? "Pauldron_L" : "Pauldron_R";
+                pauldron.transform.SetParent(chest.transform, false);
+                pauldron.transform.localPosition = new Vector3(s * 0.58f, 0.35f, 0f);
+                pauldron.transform.localScale = new Vector3(0.35f, 0.35f, 0.40f);
                 RemoveCollider(pauldron);
                 pauldron.GetComponent<MeshRenderer>().material = neonMat;
             }
 
             // -------------------------------------------------------------
-            // B. HEAD & STYLIZED CYBER VISOR / CARTOON EYES
+            // 3. NECK & HEAD (With Cyber Visor & Stylized Face)
             // -------------------------------------------------------------
+            GameObject neck = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            neck.name = "Neck";
+            neck.transform.SetParent(chest.transform, false);
+            neck.transform.localPosition = new Vector3(0f, 0.58f, 0f);
+            neck.transform.localScale = new Vector3(0.25f, 0.12f, 0.25f);
+            RemoveCollider(neck);
+            neck.GetComponent<MeshRenderer>().material = skinMat;
+
             GameObject head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             head.name = "Head";
-            head.transform.SetParent(root.transform, false);
-            head.transform.localPosition = new Vector3(0f, 1.48f, 0f);
-            head.transform.localScale = new Vector3(0.24f, 0.25f, 0.24f);
+            head.transform.SetParent(neck.transform, false);
+            head.transform.localPosition = new Vector3(0f, 1.25f, 0.05f);
+            head.transform.localScale = new Vector3(2.2f, 2.3f, 2.2f);
             RemoveCollider(head);
-            head.GetComponent<MeshRenderer>().material = suitMat;
+            head.GetComponent<MeshRenderer>().material = skinMat;
 
             // Cyber Visor / Expressive Eyes
             GameObject visor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             visor.name = "VisorEyes";
             visor.transform.SetParent(head.transform, false);
-            visor.transform.localPosition = new Vector3(0f, 0.04f, 0.46f);
-            visor.transform.localScale = new Vector3(0.70f, 0.22f, 0.18f);
+            visor.transform.localPosition = new Vector3(0f, 0.05f, 0.44f);
+            visor.transform.localScale = new Vector3(0.72f, 0.24f, 0.20f);
             RemoveCollider(visor);
             visor.GetComponent<MeshRenderer>().material = neonMat;
 
-            // Headset Antennas on left and right ears
+            // Hair / Helmet Cap
+            GameObject hair = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            hair.name = "CyberCap";
+            hair.transform.SetParent(head.transform, false);
+            hair.transform.localPosition = new Vector3(0f, 0.15f, -0.05f);
+            hair.transform.localScale = new Vector3(1.02f, 0.90f, 1.05f);
+            RemoveCollider(hair);
+            hair.GetComponent<MeshRenderer>().material = armorMat;
+
+            // Ear Communicators
             for (int e = -1; e <= 1; e += 2)
             {
                 GameObject ear = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
@@ -434,58 +804,121 @@ namespace HoloBridge.Collaboration
                 ear.transform.SetParent(head.transform, false);
                 ear.transform.localPosition = new Vector3(e * 0.50f, 0.05f, 0f);
                 ear.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
-                ear.transform.localScale = new Vector3(0.15f, 0.06f, 0.15f);
+                ear.transform.localScale = new Vector3(0.16f, 0.08f, 0.16f);
                 RemoveCollider(ear);
                 ear.GetComponent<MeshRenderer>().material = neonMat;
             }
 
             // -------------------------------------------------------------
-            // C. 3D FLOATING NAME BADGE
+            // 4. LEGS & FEET (Biomechanical Walking Limbs)
             // -------------------------------------------------------------
-            GameObject badgeObj = new GameObject("NameBadge");
-            badgeObj.transform.SetParent(root.transform, false);
-            badgeObj.transform.localPosition = new Vector3(0f, 1.76f, 0f);
+            // LEFT LEG
+            GameObject hipL = new GameObject("Hip_L");
+            hipL.transform.SetParent(pelvis.transform, false);
+            hipL.transform.localPosition = new Vector3(-0.10f, -0.06f, 0f);
 
-            // Badge Backplate
-            GameObject plate = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            plate.name = "Plate";
-            plate.transform.SetParent(badgeObj.transform, false);
-            plate.transform.localScale = new Vector3(0.68f, 0.10f, 0.015f);
-            RemoveCollider(plate);
-            plate.GetComponent<MeshRenderer>().material = suitMat;
+            GameObject thighL = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            thighL.name = "Thigh_L";
+            thighL.transform.SetParent(hipL.transform, false);
+            thighL.transform.localPosition = new Vector3(0f, -0.20f, 0f);
+            thighL.transform.localScale = new Vector3(0.12f, 0.20f, 0.12f);
+            RemoveCollider(thighL);
+            thighL.GetComponent<MeshRenderer>().material = suitMat;
 
-            // TextMesh Component
-            GameObject textObj = new GameObject("Label");
-            textObj.transform.SetParent(badgeObj.transform, false);
-            textObj.transform.localPosition = new Vector3(0f, 0f, -0.015f);
-            textObj.transform.localScale = Vector3.one * 0.015f;
+            GameObject kneeL = new GameObject("Knee_L");
+            kneeL.transform.SetParent(hipL.transform, false);
+            kneeL.transform.localPosition = new Vector3(0f, -0.40f, 0f);
 
-            TextMesh tm = textObj.AddComponent<TextMesh>();
-            tm.text = name;
-            tm.fontSize = 24;
-            tm.characterSize = 1f;
-            tm.anchor = TextAnchor.MiddleCenter;
-            tm.alignment = TextAlignment.Center;
-            tm.color = themeColor;
+            GameObject calfL = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            calfL.name = "Calf_L";
+            calfL.transform.SetParent(kneeL.transform, false);
+            calfL.transform.localPosition = new Vector3(0f, -0.20f, 0f);
+            calfL.transform.localScale = new Vector3(0.10f, 0.20f, 0.10f);
+            RemoveCollider(calfL);
+            calfL.GetComponent<MeshRenderer>().material = suitMat;
+
+            GameObject footL = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            footL.name = "Boot_L";
+            footL.transform.SetParent(kneeL.transform, false);
+            footL.transform.localPosition = new Vector3(0f, -0.42f, 0.06f);
+            footL.transform.localScale = new Vector3(0.11f, 0.07f, 0.22f);
+            RemoveCollider(footL);
+            footL.GetComponent<MeshRenderer>().material = armorMat;
+
+            // RIGHT LEG
+            GameObject hipR = new GameObject("Hip_R");
+            hipR.transform.SetParent(pelvis.transform, false);
+            hipR.transform.localPosition = new Vector3(0.10f, -0.06f, 0f);
+
+            GameObject thighR = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            thighR.name = "Thigh_R";
+            thighR.transform.SetParent(hipR.transform, false);
+            thighR.transform.localPosition = new Vector3(0f, -0.20f, 0f);
+            thighR.transform.localScale = new Vector3(0.12f, 0.20f, 0.12f);
+            RemoveCollider(thighR);
+            thighR.GetComponent<MeshRenderer>().material = suitMat;
+
+            GameObject kneeR = new GameObject("Knee_R");
+            kneeR.transform.SetParent(hipR.transform, false);
+            kneeR.transform.localPosition = new Vector3(0f, -0.40f, 0f);
+
+            GameObject calfR = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            calfR.name = "Calf_R";
+            calfR.transform.SetParent(kneeR.transform, false);
+            calfR.transform.localPosition = new Vector3(0f, -0.20f, 0f);
+            calfR.transform.localScale = new Vector3(0.10f, 0.20f, 0.10f);
+            RemoveCollider(calfR);
+            calfR.GetComponent<MeshRenderer>().material = suitMat;
+
+            GameObject footR = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            footR.name = "Boot_R";
+            footR.transform.SetParent(kneeR.transform, false);
+            footR.transform.localPosition = new Vector3(0f, -0.42f, 0.06f);
+            footR.transform.localScale = new Vector3(0.11f, 0.07f, 0.22f);
+            RemoveCollider(footR);
+            footR.GetComponent<MeshRenderer>().material = armorMat;
 
             // -------------------------------------------------------------
-            // D. LEFT HAND & HELD DEVICE (Smartphone, Console, or Controller)
+            // 5. LEFT ARM & HELD TOOL (Smartphone / Console)
             // -------------------------------------------------------------
-            GameObject leftHand = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            leftHand.name = "Hand_Left";
-            leftHand.transform.SetParent(root.transform, false);
-            leftHand.transform.localPosition = new Vector3(-0.24f, 1.15f, 0.28f);
-            leftHand.transform.localScale = Vector3.one * 0.09f;
-            RemoveCollider(leftHand);
-            leftHand.GetComponent<MeshRenderer>().material = suitMat;
+            GameObject shoulderL = new GameObject("Shoulder_L");
+            shoulderL.transform.SetParent(chest.transform, false);
+            shoulderL.transform.localPosition = new Vector3(-0.24f, 0.12f, 0f);
+
+            GameObject upperArmL = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            upperArmL.name = "UpperArm_L";
+            upperArmL.transform.SetParent(shoulderL.transform, false);
+            upperArmL.transform.localPosition = new Vector3(0f, -0.15f, 0f);
+            upperArmL.transform.localScale = new Vector3(0.09f, 0.15f, 0.09f);
+            RemoveCollider(upperArmL);
+            upperArmL.GetComponent<MeshRenderer>().material = suitMat;
+
+            GameObject elbowL = new GameObject("Elbow_L");
+            elbowL.transform.SetParent(shoulderL.transform, false);
+            elbowL.transform.localPosition = new Vector3(0f, -0.30f, 0f);
+
+            GameObject forearmL = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            forearmL.name = "Forearm_L";
+            forearmL.transform.SetParent(elbowL.transform, false);
+            forearmL.transform.localPosition = new Vector3(0f, -0.12f, 0f);
+            forearmL.transform.localScale = new Vector3(0.08f, 0.13f, 0.08f);
+            RemoveCollider(forearmL);
+            forearmL.GetComponent<MeshRenderer>().material = suitMat;
+
+            GameObject handL = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            handL.name = "Hand_Left";
+            handL.transform.SetParent(elbowL.transform, false);
+            handL.transform.localPosition = new Vector3(0f, -0.25f, 0.02f);
+            handL.transform.localScale = Vector3.one * 0.085f;
+            RemoveCollider(handL);
+            handL.GetComponent<MeshRenderer>().material = skinMat;
 
             if (role == DeviceRole.MobileTablet)
             {
-                // Glowing 3D Smartphone held in hand
                 GameObject phone = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 phone.name = "Smartphone";
-                phone.transform.SetParent(leftHand.transform, false);
-                phone.transform.localPosition = new Vector3(0f, 0.05f, 0.05f);
+                phone.transform.SetParent(handL.transform, false);
+                phone.transform.localPosition = new Vector3(0f, 0.04f, 0.05f);
                 phone.transform.localScale = new Vector3(1.2f, 2.2f, 0.15f);
                 phone.transform.localRotation = Quaternion.Euler(-30f, 15f, 0f);
                 RemoveCollider(phone);
@@ -493,10 +926,9 @@ namespace HoloBridge.Collaboration
             }
             else if (role == DeviceRole.DesktopPC)
             {
-                // Holographic CAD Console
                 GameObject console = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 console.name = "CADConsole";
-                console.transform.SetParent(leftHand.transform, false);
+                console.transform.SetParent(handL.transform, false);
                 console.transform.localPosition = new Vector3(0.12f, 0.08f, 0.15f);
                 console.transform.localScale = new Vector3(2.8f, 0.2f, 1.6f);
                 RemoveCollider(console);
@@ -504,19 +936,43 @@ namespace HoloBridge.Collaboration
             }
 
             // -------------------------------------------------------------
-            // E. RIGHT HAND & 3D OPTICAL LASER RAY
+            // 6. RIGHT ARM & OPTICAL LASER RAY
             // -------------------------------------------------------------
-            GameObject rightHand = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            rightHand.name = "Hand_Right";
-            rightHand.transform.SetParent(root.transform, false);
-            rightHand.transform.localPosition = new Vector3(0.24f, 1.18f, 0.35f);
-            rightHand.transform.localScale = Vector3.one * 0.09f;
-            RemoveCollider(rightHand);
-            rightHand.GetComponent<MeshRenderer>().material = suitMat;
+            GameObject shoulderR = new GameObject("Shoulder_R");
+            shoulderR.transform.SetParent(chest.transform, false);
+            shoulderR.transform.localPosition = new Vector3(0.24f, 0.12f, 0f);
+
+            GameObject upperArmR = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            upperArmR.name = "UpperArm_R";
+            upperArmR.transform.SetParent(shoulderR.transform, false);
+            upperArmR.transform.localPosition = new Vector3(0f, -0.15f, 0f);
+            upperArmR.transform.localScale = new Vector3(0.09f, 0.15f, 0.09f);
+            RemoveCollider(upperArmR);
+            upperArmR.GetComponent<MeshRenderer>().material = suitMat;
+
+            GameObject elbowR = new GameObject("Elbow_R");
+            elbowR.transform.SetParent(shoulderR.transform, false);
+            elbowR.transform.localPosition = new Vector3(0f, -0.30f, 0f);
+
+            GameObject forearmR = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            forearmR.name = "Forearm_R";
+            forearmR.transform.SetParent(elbowR.transform, false);
+            forearmR.transform.localPosition = new Vector3(0f, -0.12f, 0f);
+            forearmR.transform.localScale = new Vector3(0.08f, 0.13f, 0.08f);
+            RemoveCollider(forearmR);
+            forearmR.GetComponent<MeshRenderer>().material = suitMat;
+
+            GameObject handR = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            handR.name = "Hand_Right";
+            handR.transform.SetParent(elbowR.transform, false);
+            handR.transform.localPosition = new Vector3(0f, -0.25f, 0.02f);
+            handR.transform.localScale = Vector3.one * 0.085f;
+            RemoveCollider(handR);
+            handR.GetComponent<MeshRenderer>().material = skinMat;
 
             // Optical Laser LineRenderer
             GameObject laserObj = new GameObject("LaserBeam");
-            laserObj.transform.SetParent(rightHand.transform, false);
+            laserObj.transform.SetParent(handR.transform, false);
             var lr = laserObj.AddComponent<LineRenderer>();
             lr.material = new Material(Shader.Find("Sprites/Default"));
             lr.startColor = themeColor;
@@ -535,6 +991,34 @@ namespace HoloBridge.Collaboration
             var rMr = reticle.GetComponent<MeshRenderer>();
             rMr.material = new Material(Shader.Find("Sprites/Default")) { color = themeColor };
 
+            // -------------------------------------------------------------
+            // 7. 3D FLOATING NAME BADGE (At Y = 1.95m above head)
+            // -------------------------------------------------------------
+            GameObject badgeObj = new GameObject("NameBadge");
+            badgeObj.transform.SetParent(root.transform, false);
+            badgeObj.transform.localPosition = new Vector3(0f, 1.95f, 0f);
+
+            GameObject plate = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            plate.name = "Plate";
+            plate.transform.SetParent(badgeObj.transform, false);
+            plate.transform.localScale = new Vector3(0.72f, 0.11f, 0.015f);
+            RemoveCollider(plate);
+            plate.GetComponent<MeshRenderer>().material = suitMat;
+
+            GameObject textObj = new GameObject("Label");
+            textObj.transform.SetParent(badgeObj.transform, false);
+            textObj.transform.localPosition = new Vector3(0f, 0f, -0.015f);
+            textObj.transform.localScale = Vector3.one * 0.015f;
+
+            TextMesh tm = textObj.AddComponent<TextMesh>();
+            tm.text = name;
+            tm.fontSize = 24;
+            tm.characterSize = 1f;
+            tm.anchor = TextAnchor.MiddleCenter;
+            tm.alignment = TextAlignment.Center;
+            tm.fontStyle = FontStyle.Bold;
+            tm.color = themeColor;
+
             var avatar = new CollaboratorAvatar
             {
                 clientId = clientId,
@@ -542,13 +1026,40 @@ namespace HoloBridge.Collaboration
                 teamColor = themeColor,
                 role = role,
                 rootObj = root,
-                headTransform = head.transform,
+
+                pelvisTransform = pelvis.transform,
                 torsoTransform = torso.transform,
-                leftHandTransform = leftHand.transform,
-                rightHandTransform = rightHand.transform,
+                chestTransform = chest.transform,
+                headTransform = head.transform,
+
+                leftShoulderPivot = shoulderL.transform,
+                leftUpperArm = upperArmL.transform,
+                leftElbowPivot = elbowL.transform,
+                leftForearm = forearmL.transform,
+                leftHandTransform = handL.transform,
+
+                rightShoulderPivot = shoulderR.transform,
+                rightUpperArm = upperArmR.transform,
+                rightElbowPivot = elbowR.transform,
+                rightForearm = forearmR.transform,
+                rightHandTransform = handR.transform,
+
+                leftHipPivot = hipL.transform,
+                leftThigh = thighL.transform,
+                leftKneePivot = kneeL.transform,
+                leftCalf = calfL.transform,
+                leftFoot = footL.transform,
+
+                rightHipPivot = hipR.transform,
+                rightThigh = thighR.transform,
+                rightKneePivot = kneeR.transform,
+                rightCalf = calfR.transform,
+                rightFoot = footR.transform,
+
                 laserBeam = lr,
                 laserReticle = reticle.transform,
                 nameTagTextMesh = tm,
+                lastPosition = pos,
                 animPhase = UnityEngine.Random.Range(0f, Mathf.PI * 2f),
                 lastActivityTime = Time.time
             };
@@ -577,6 +1088,17 @@ namespace HoloBridge.Collaboration
                 }
             }
 
+            // WASD Navigation in Third-Person or Bird's-Eye View
+            if (currentCameraMode == PlayerCameraMode.ThirdPerson || currentCameraMode == PlayerCameraMode.BirdsEye)
+            {
+                float h = Input.GetAxisRaw("Horizontal");
+                float v = Input.GetAxisRaw("Vertical");
+                if (Mathf.Abs(h) > 0.01f || Mathf.Abs(v) > 0.01f)
+                {
+                    MoveLocalPlayer(h * 3.2f * Time.deltaTime, v * 3.2f * Time.deltaTime);
+                }
+            }
+
             HandleRoleShortcuts();
             UpdateCollaboratorAvatars();
             EvaluateCrossRayResonance();
@@ -588,6 +1110,24 @@ namespace HoloBridge.Collaboration
             if (Input.GetKeyDown(KeyCode.F1) && !OmniOS.Apps.MediaHub.OmniAppMediaHub.IsTypingActive)
             {
                 CycleNextRole();
+            }
+
+            // 'B' Key: Toggle Tactical Bird's-Eye View (🦅 বার্ডস আই ভিউ)
+            if (Input.GetKeyDown(KeyCode.B) && !OmniOS.Apps.MediaHub.OmniAppMediaHub.IsTypingActive)
+            {
+                ToggleBirdsEyeView();
+            }
+
+            // 'V' Key: Toggle Third-Person View (Over-the-shoulder avatar follow)
+            if (Input.GetKeyDown(KeyCode.V) && !OmniOS.Apps.MediaHub.OmniAppMediaHub.IsTypingActive)
+            {
+                ToggleThirdPersonView();
+            }
+
+            // 'F' Key: Switch to First-Person View
+            if (Input.GetKeyDown(KeyCode.F) && !OmniOS.Apps.MediaHub.OmniAppMediaHub.IsTypingActive)
+            {
+                SetCameraMode(PlayerCameraMode.FirstPerson);
             }
 
             // 'M' Key: Toggle On-Screen Mobile Phone Simulator
@@ -654,16 +1194,27 @@ namespace HoloBridge.Collaboration
                     else if (av.role == DeviceRole.DesktopPC) pcCount++;
                     else mobCount++;
 
-                    // 1. Organic Living Breathing Animation
-                    float breathOffset = Mathf.Sin(time * 2.2f + av.animPhase) * 0.012f;
-                    if (av.torsoTransform != null)
+                    // Sync local avatar to player camera when in First Person
+                    if (cam != null && currentCameraMode == PlayerCameraMode.FirstPerson && (av.id == GetLocalOperatorId() || av.id == "vr_local" || av.id == "pc_local" || av.id == "web_local"))
                     {
-                        av.torsoTransform.localPosition = new Vector3(0f, 1.05f + breathOffset, 0f);
+                        Vector3 camGround = new Vector3(cam.transform.position.x, 0f, cam.transform.position.z);
+                        float dist = Vector3.Distance(camGround, av.lastPosition);
+                        float instSpeed = dist / Mathf.Max(0.0001f, Time.deltaTime);
+                        av.walkSpeed = Mathf.Lerp(av.walkSpeed, instSpeed, Time.deltaTime * 8f);
+                        av.isWalking = av.walkSpeed > 0.05f;
+                        av.rootObj.transform.position = camGround;
+
+                        Vector3 fwd = cam.transform.forward;
+                        fwd.y = 0;
+                        if (fwd.sqrMagnitude > 0.001f)
+                        {
+                            av.rootObj.transform.rotation = Quaternion.Slerp(av.rootObj.transform.rotation, Quaternion.LookRotation(fwd.normalized), Time.deltaTime * 12f);
+                        }
+                        av.lastPosition = camGround;
                     }
-                    if (av.headTransform != null)
-                    {
-                        av.headTransform.localPosition = new Vector3(0f, 1.48f + breathOffset * 1.4f, 0f);
-                    }
+
+                    // 1. Procedural Human Locomotion & Walking Stride (Legs, Knees, Arms, Bobbing)
+                    UpdateHumanoidLocomotion(av);
 
                     // 2. Laser Origin (From Right Pointer Hand)
                     Vector3 laserOrigin = av.rightHandTransform != null
@@ -730,11 +1281,29 @@ namespace HoloBridge.Collaboration
             int totalCount = vrCount + pcCount + mobCount;
             if (boardTitleTextMesh != null)
             {
-                boardTitleTextMesh.text = $"👥 ACTIVE OPERATORS: {totalCount}";
+                if (totalCount == 0)
+                {
+                    boardTitleTextMesh.text = "👥 ACTIVE OPERATORS: 0";
+                    boardTitleTextMesh.color = new Color(0.35f, 0.75f, 1.0f);
+                }
+                else
+                {
+                    boardTitleTextMesh.text = $"👥 ACTIVE OPERATORS: {totalCount}";
+                    boardTitleTextMesh.color = new Color(0.0f, 1.0f, 0.55f);
+                }
             }
             if (boardDetailsTextMesh != null)
             {
-                boardDetailsTextMesh.text = $"[ 🥽 VR: {vrCount}  |  🖥️ PC: {pcCount}  |  📱 Mobile: {mobCount} ]";
+                if (totalCount == 0)
+                {
+                    boardDetailsTextMesh.text = "[ Waiting for operators to connect... ]";
+                    boardDetailsTextMesh.color = new Color(0.65f, 0.85f, 1.0f);
+                }
+                else
+                {
+                    boardDetailsTextMesh.text = $"[ 🥽 VR: {vrCount}  |  🖥️ PC: {pcCount}  |  📱 Mobile: {mobCount} ]";
+                    boardDetailsTextMesh.color = new Color(0.80f, 0.95f, 1.0f);
+                }
             }
             if (collaboratorBoardRoot != null && cam != null)
             {
@@ -742,6 +1311,271 @@ namespace HoloBridge.Collaboration
                 if (toCamBoard.sqrMagnitude > 0.01f)
                 {
                     collaboratorBoardRoot.transform.rotation = Quaternion.LookRotation(toCamBoard);
+                }
+            }
+        }
+
+        public void MoveLocalPlayer(float strafe, float forward)
+        {
+            Camera cam = Camera.main;
+            Transform refTrans = cam != null ? cam.transform : transform;
+
+            Vector3 fwd = refTrans.forward;
+            fwd.y = 0;
+            if (fwd.sqrMagnitude > 0.001f) fwd.Normalize();
+
+            Vector3 right = refTrans.right;
+            right.y = 0;
+            if (right.sqrMagnitude > 0.001f) right.Normalize();
+
+            Vector3 moveDelta = (fwd * forward + right * strafe);
+
+            string localId = GetLocalOperatorId();
+            lock (participantsLock)
+            {
+                if (!participants.TryGetValue(localId, out var localAv) || localAv == null || localAv.rootObj == null)
+                {
+                    localAv = pcAvatar ?? vrAvatar;
+                    if (localAv == null || localAv.rootObj == null)
+                    {
+                        foreach (var p in participants.Values)
+                        {
+                            if (p != null && p.rootObj != null)
+                            {
+                                localAv = p;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (localAv != null && localAv.rootObj != null)
+                {
+                    localAv.rootObj.transform.position += moveDelta;
+                    localAv.walkSpeed = Mathf.Max(localAv.walkSpeed, 1.8f);
+                    localAv.isWalking = true;
+                    localAv.lastActivityTime = Time.time;
+                    if (moveDelta.sqrMagnitude > 0.001f)
+                    {
+                        localAv.rootObj.transform.rotation = Quaternion.Slerp(localAv.rootObj.transform.rotation, Quaternion.LookRotation(moveDelta.normalized), Time.deltaTime * 10f);
+                    }
+                }
+            }
+
+            if (currentCameraMode == PlayerCameraMode.FirstPerson)
+            {
+                OmniOS.Interaction.OmniSpatialLocomotion.Instance?.ApplyRemoteMoveDelta(strafe, forward, 0f, 0f);
+            }
+        }
+
+        #region WebGL Direct JavaScript Messaging Bridge
+
+        /// <summary>
+        /// Direct WebGL JavaScript Bridge: Called when player drags 1-finger virtual joystick on web canvas
+        /// Format: "dx,dy" or "dx,dy,speed"
+        /// </summary>
+        public void OnWebTouchMove(string deltaStr)
+        {
+            if (string.IsNullOrEmpty(deltaStr)) return;
+            string[] parts = deltaStr.Split(',');
+            if (parts.Length >= 2 &&
+                float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float dx) &&
+                float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float dy))
+            {
+                float speed = 2.4f;
+                if (parts.Length >= 3 && float.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float sp))
+                {
+                    speed = sp;
+                }
+
+                MoveLocalPlayer(dx * speed * Time.deltaTime, dy * speed * Time.deltaTime);
+            }
+        }
+
+        public void OnWebSetCameraView(string viewMode)
+        {
+            switch (viewMode?.ToLower())
+            {
+                case "birds_eye":
+                case "topdown":
+                case "bird":
+                    SetCameraMode(PlayerCameraMode.BirdsEye);
+                    break;
+                case "third_person":
+                case "third":
+                case "3rd":
+                    SetCameraMode(PlayerCameraMode.ThirdPerson);
+                    break;
+                case "first_person":
+                case "first":
+                case "1st":
+                    SetCameraMode(PlayerCameraMode.FirstPerson);
+                    break;
+                case "arena":
+                case "overview":
+                    SetCameraMode(PlayerCameraMode.ArenaOverview);
+                    break;
+            }
+        }
+
+        public void OnWebTriggerAction(string action)
+        {
+            switch (action?.ToLower())
+            {
+                case "theme":
+                    MetaverseEnvironmentManager.Instance?.NextTheme();
+                    break;
+                case "explode":
+                    SharedDigitalTwinAssembly.Instance?.ToggleExplodedView();
+                    break;
+                case "peel":
+                    TriggerScreenPeel();
+                    break;
+                case "role":
+                    CycleNextRole();
+                    break;
+                case "join":
+                    EnsureLocalOperatorJoined();
+                    break;
+            }
+        }
+
+        public void OnWebLaserAim(string coords)
+        {
+            if (string.IsNullOrEmpty(coords)) return;
+            string[] parts = coords.Split(',');
+            if (parts.Length >= 2 &&
+                float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float x) &&
+                float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float y))
+            {
+                string localId = GetLocalOperatorId();
+                lock (participantsLock)
+                {
+                    if (participants.TryGetValue(localId, out var localAv) && localAv != null)
+                    {
+                        localAv.touchCoords = new Vector2(x, y);
+                    }
+                }
+            }
+        }
+
+        #endregion
+
+        private void UpdateHumanoidLocomotion(CollaboratorAvatar av)
+        {
+            if (av == null || av.rootObj == null || av.pelvisTransform == null) return;
+
+            float dt = Mathf.Max(0.001f, Time.deltaTime);
+            Vector3 curPos = av.rootObj.transform.position;
+            Vector3 disp = curPos - av.lastPosition;
+            disp.y = 0f;
+            float instantSpeed = disp.magnitude / dt;
+            av.lastPosition = curPos;
+
+            // Blend speed
+            av.walkSpeed = Mathf.Lerp(av.walkSpeed, instantSpeed, dt * 10f);
+            av.isWalking = av.walkSpeed > 0.05f;
+
+            if (av.isWalking)
+            {
+                float freq = Mathf.Clamp(av.walkSpeed * 5.0f, 4.0f, 9.0f);
+                av.walkPhase += dt * freq;
+
+                float sin = Mathf.Sin(av.walkPhase);
+                float cos = Mathf.Cos(av.walkPhase);
+
+                // 1. Natural Leg Stride (Forward / Backward leg swings)
+                float strideAngle = sin * 32f;
+                if (av.leftHipPivot != null) av.leftHipPivot.localRotation = Quaternion.Euler(strideAngle, 0f, 0f);
+                if (av.rightHipPivot != null) av.rightHipPivot.localRotation = Quaternion.Euler(-strideAngle, 0f, 0f);
+
+                // 2. Realistic Knee Bends (Bends backwards on forward stride lift)
+                float leftKnee = Mathf.Max(0f, -sin) * 48f;
+                float rightKnee = Mathf.Max(0f, sin) * 48f;
+                if (av.leftKneePivot != null) av.leftKneePivot.localRotation = Quaternion.Euler(leftKnee, 0f, 0f);
+                if (av.rightKneePivot != null) av.rightKneePivot.localRotation = Quaternion.Euler(rightKnee, 0f, 0f);
+
+                // 3. Counter Arm Swing (Left Arm swings with Right Leg, Right Arm swings with Left Leg)
+                float armSwing = -strideAngle * 0.85f;
+                if (av.leftShoulderPivot != null)
+                {
+                    av.leftShoulderPivot.localRotation = Quaternion.Euler(armSwing, 0f, -8f);
+                }
+                if (av.leftElbowPivot != null)
+                {
+                    av.leftElbowPivot.localRotation = Quaternion.Euler(-18f + Mathf.Abs(armSwing) * 0.35f, 0f, 0f);
+                }
+
+                // Right Arm (Aiming or natural counter-swing)
+                if (av.rightShoulderPivot != null && av.rightElbowPivot != null)
+                {
+                    if (av.currentTargetPoint != Vector3.zero)
+                    {
+                        Vector3 toTarget = (av.currentTargetPoint - av.rightShoulderPivot.position).normalized;
+                        Vector3 localAim = av.rootObj.transform.InverseTransformDirection(toTarget);
+                        float pitch = -Mathf.Asin(Mathf.Clamp(localAim.y, -0.85f, 0.85f)) * Mathf.Rad2Deg;
+                        float yaw = Mathf.Atan2(localAim.x, localAim.z) * Mathf.Rad2Deg;
+                        av.rightShoulderPivot.localRotation = Quaternion.Slerp(av.rightShoulderPivot.localRotation, Quaternion.Euler(pitch, yaw, 0f), dt * 10f);
+                        av.rightElbowPivot.localRotation = Quaternion.Slerp(av.rightElbowPivot.localRotation, Quaternion.Euler(-10f, 0f, 0f), dt * 10f);
+                    }
+                    else
+                    {
+                        av.rightShoulderPivot.localRotation = Quaternion.Euler(-armSwing, 0f, 8f);
+                        av.rightElbowPivot.localRotation = Quaternion.Euler(-18f + Mathf.Abs(armSwing) * 0.35f, 0f, 0f);
+                    }
+                }
+
+                // 4. Pelvis Vertical Bounce & Torso Twist
+                float bounce = Mathf.Abs(sin) * 0.035f;
+                av.pelvisTransform.localPosition = new Vector3(0f, 0.92f - bounce, 0f);
+                if (av.chestTransform != null)
+                {
+                    av.chestTransform.localRotation = Quaternion.Euler(0f, sin * 6f, -sin * 2.5f);
+                }
+            }
+            else
+            {
+                // Standing Idle: Smoothly return joints to resting pose
+                if (av.leftHipPivot != null) av.leftHipPivot.localRotation = Quaternion.Slerp(av.leftHipPivot.localRotation, Quaternion.Euler(0f, 0f, -2f), dt * 6f);
+                if (av.leftKneePivot != null) av.leftKneePivot.localRotation = Quaternion.Slerp(av.leftKneePivot.localRotation, Quaternion.identity, dt * 6f);
+                if (av.rightHipPivot != null) av.rightHipPivot.localRotation = Quaternion.Slerp(av.rightHipPivot.localRotation, Quaternion.Euler(0f, 0f, 2f), dt * 6f);
+                if (av.rightKneePivot != null) av.rightKneePivot.localRotation = Quaternion.Slerp(av.rightKneePivot.localRotation, Quaternion.identity, dt * 6f);
+
+                // Natural Breathing Rhythm
+                float breath = Mathf.Sin(Time.time * 2.2f + av.animPhase) * 0.010f;
+                av.pelvisTransform.localPosition = Vector3.Lerp(av.pelvisTransform.localPosition, new Vector3(0f, 0.92f + breath * 0.5f, 0f), dt * 5f);
+                if (av.chestTransform != null)
+                {
+                    av.chestTransform.localRotation = Quaternion.Slerp(av.chestTransform.localRotation, Quaternion.Euler(breath * 80f, 0f, 0f), dt * 5f);
+                }
+
+                // Left Arm holds device naturally at waist/chest
+                if (av.leftShoulderPivot != null)
+                {
+                    av.leftShoulderPivot.localRotation = Quaternion.Slerp(av.leftShoulderPivot.localRotation, Quaternion.Euler(22f, -10f, -8f), dt * 5f);
+                }
+                if (av.leftElbowPivot != null)
+                {
+                    av.leftElbowPivot.localRotation = Quaternion.Slerp(av.leftElbowPivot.localRotation, Quaternion.Euler(-45f, 0f, 0f), dt * 5f);
+                }
+
+                // Right Arm points forward if aiming, else rests at side
+                if (av.rightShoulderPivot != null && av.rightElbowPivot != null)
+                {
+                    if (av.currentTargetPoint != Vector3.zero)
+                    {
+                        Vector3 toTarget = (av.currentTargetPoint - av.rightShoulderPivot.position).normalized;
+                        Vector3 localAim = av.rootObj.transform.InverseTransformDirection(toTarget);
+                        float pitch = -Mathf.Asin(Mathf.Clamp(localAim.y, -0.85f, 0.85f)) * Mathf.Rad2Deg;
+                        float yaw = Mathf.Atan2(localAim.x, localAim.z) * Mathf.Rad2Deg;
+                        av.rightShoulderPivot.localRotation = Quaternion.Slerp(av.rightShoulderPivot.localRotation, Quaternion.Euler(pitch, yaw, 0f), dt * 8f);
+                        av.rightElbowPivot.localRotation = Quaternion.Slerp(av.rightElbowPivot.localRotation, Quaternion.Euler(-15f, 0f, 0f), dt * 8f);
+                    }
+                    else
+                    {
+                        av.rightShoulderPivot.localRotation = Quaternion.Slerp(av.rightShoulderPivot.localRotation, Quaternion.Euler(0f, 0f, 6f), dt * 5f);
+                        av.rightElbowPivot.localRotation = Quaternion.Slerp(av.rightElbowPivot.localRotation, Quaternion.Euler(-10f, 0f, 0f), dt * 5f);
+                    }
                 }
             }
         }
@@ -869,6 +1703,61 @@ namespace HoloBridge.Collaboration
                 float t = Mathf.SmoothStep(0f, 1f, elapsed / duration);
                 target.position = Vector3.Lerp(startPos, endPos, t) + Vector3.up * Mathf.Sin(t * Mathf.PI) * 0.2f;
                 yield return null;
+            }
+        }
+
+        public void CenterCameraView()
+        {
+            var loc = OmniOS.Interaction.OmniSpatialLocomotion.Instance;
+            if (loc != null)
+            {
+                loc.ResolveRigReferences();
+            }
+            Camera cam = Camera.main;
+            if (cam != null)
+            {
+                Transform rig = cam.transform.parent != null && cam.transform.parent.parent != null 
+                    ? cam.transform.parent.parent 
+                    : (cam.transform.parent != null ? cam.transform.parent : cam.transform);
+                if (rig != null)
+                {
+                    rig.position = new Vector3(0f, 0f, 0f);
+                    rig.rotation = Quaternion.identity;
+                }
+            }
+            OmniOSManager.Instance?.ShowNotificationToast("🔄 View Reset to Center");
+        }
+
+        public void HandleRemoteStreamClick(float normX, float normY)
+        {
+            Camera cam = streamCamera != null ? streamCamera : Camera.main;
+            if (cam == null) return;
+
+            // Viewport coords are 0..1 from bottom-left
+            Ray ray = cam.ViewportPointToRay(new Vector3(normX, normY, 0f));
+            if (Physics.Raycast(ray, out RaycastHit hit, 35f))
+            {
+                var btn = hit.collider.GetComponentInParent<SpatialButton3D>();
+                if (btn != null)
+                {
+                    btn.TriggerClick();
+                    return;
+                }
+
+                var twinAssembly = SharedDigitalTwinAssembly.Instance;
+                if (twinAssembly != null)
+                {
+                    var part = twinAssembly.GetPartByGameObject(hit.collider.gameObject);
+                    if (part != null)
+                    {
+                        twinAssembly.SetPartSelected(part.componentType, !part.isSelected);
+                        SpatialAudioEngine.Instance?.PlayButtonClick();
+                        OmniOSManager.Instance?.ShowNotificationToast($"Selected Twin Part: {part.displayName}");
+                        return;
+                    }
+                }
+
+                SpatialAudioEngine.Instance?.PlayHoverTick();
             }
         }
 
@@ -1028,7 +1917,133 @@ namespace HoloBridge.Collaboration
                         byte[] body = Encoding.UTF8.GetBytes(json);
                         writer.Write($"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n{json}");
                     }
-                    // 4. ACTION ENDPOINT (/api/action?type=...&client=...)
+                    // 4. REMOTE MOVEMENT & STEERING ENDPOINT (/api/move?client=...&target=...&x=...&z=...&yaw=...&y=...)
+                    else if (url.StartsWith("/api/move"))
+                    {
+                        float mx = 0f, mz = 0f, yaw = 0f, my = 0f;
+                        string cId = null;
+                        string targetUser = null;
+                        int qIdx = url.IndexOf('?');
+                        if (qIdx >= 0)
+                        {
+                            string query = url.Substring(qIdx + 1);
+                            var pairs = query.Split('&');
+                            foreach (var p in pairs)
+                            {
+                                var kv = p.Split('=');
+                                if (kv.Length == 2)
+                                {
+                                    if (kv[0] == "client") cId = kv[1];
+                                    if (kv[0] == "target") targetUser = Uri.UnescapeDataString(kv[1]);
+                                    if (kv[0] == "x") float.TryParse(kv[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out mx);
+                                    if (kv[0] == "z") float.TryParse(kv[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out mz);
+                                    if (kv[0] == "y") float.TryParse(kv[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out my);
+                                    if (kv[0] == "yaw") float.TryParse(kv[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out yaw);
+                                }
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(cId))
+                        {
+                            EnqueueMainThread(() => EnsureParticipantRegistered(cId));
+                        }
+
+                        EnqueueMainThread(() => {
+                            string target = !string.IsNullOrEmpty(targetUser) ? targetUser : streamTargetUserId;
+                            if (!string.IsNullOrEmpty(target) && target != "arena")
+                            {
+                                lock (participantsLock)
+                                {
+                                    if (participants.TryGetValue(target, out CollaboratorAvatar targetAv) && targetAv != null && targetAv.rootObj != null)
+                                    {
+                                        Vector3 fwd = targetAv.rootObj.transform.forward;
+                                        fwd.y = 0; if (fwd.sqrMagnitude > 0.001f) fwd.Normalize();
+                                        Vector3 right = targetAv.rootObj.transform.right;
+                                        right.y = 0; if (right.sqrMagnitude > 0.001f) right.Normalize();
+
+                                        Vector3 moveDelta = (fwd * mz + right * mx + Vector3.up * my) * 0.45f;
+                                        targetAv.rootObj.transform.position += moveDelta;
+                                        targetAv.walkSpeed = Mathf.Max(targetAv.walkSpeed, 1.8f);
+                                        targetAv.isWalking = true;
+                                        targetAv.lastActivityTime = Time.time;
+
+                                        if (Mathf.Abs(yaw) > 0.01f)
+                                        {
+                                            targetAv.rootObj.transform.Rotate(0f, yaw * 20f, 0f);
+                                        }
+
+                                        if (target == "vr_local" || target == "main")
+                                        {
+                                            OmniOS.Interaction.OmniSpatialLocomotion.Instance?.ApplyRemoteMoveDelta(mx, mz, yaw, my);
+                                        }
+                                        return;
+                                    }
+                                }
+                            }
+                            OmniOS.Interaction.OmniSpatialLocomotion.Instance?.ApplyRemoteMoveDelta(mx, mz, yaw, my);
+                        });
+
+                        string json = "{\"status\":\"moved\"}";
+                        byte[] body = Encoding.UTF8.GetBytes(json);
+                        writer.Write($"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n{json}");
+                    }
+                    // 5. REMOTE CLICK & RAYCAST ENDPOINT (/api/click?client=...&x=...&y=...)
+                    else if (url.StartsWith("/api/click"))
+                    {
+                        float cx = 0.5f, cy = 0.5f;
+                        string cId = null;
+                        int qIdx = url.IndexOf('?');
+                        if (qIdx >= 0)
+                        {
+                            string query = url.Substring(qIdx + 1);
+                            var pairs = query.Split('&');
+                            foreach (var p in pairs)
+                            {
+                                var kv = p.Split('=');
+                                if (kv.Length == 2)
+                                {
+                                    if (kv[0] == "client") cId = kv[1];
+                                    if (kv[0] == "x") float.TryParse(kv[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out cx);
+                                    if (kv[0] == "y") float.TryParse(kv[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out cy);
+                                }
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(cId))
+                        {
+                            EnqueueMainThread(() => EnsureParticipantRegistered(cId));
+                        }
+
+                        EnqueueMainThread(() => HandleRemoteStreamClick(cx, cy));
+
+                        string json = "{\"status\":\"clicked\"}";
+                        byte[] body = Encoding.UTF8.GetBytes(json);
+                        writer.Write($"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n{json}");
+                    }
+                    // 6. STREAM PERSPECTIVE / USER VIEW SWITCHER ENDPOINT (/api/view?target=...&client=...)
+                    else if (url.StartsWith("/api/view"))
+                    {
+                        string target = "main";
+                        int qIdx = url.IndexOf('?');
+                        if (qIdx >= 0)
+                        {
+                            string query = url.Substring(qIdx + 1);
+                            var pairs = query.Split('&');
+                            foreach (var p in pairs)
+                            {
+                                var kv = p.Split('=');
+                                if (kv.Length == 2 && kv[0] == "target" && !string.IsNullOrEmpty(kv[1]))
+                                {
+                                    target = Uri.UnescapeDataString(kv[1]);
+                                }
+                            }
+                        }
+                        EnqueueMainThread(() => SetStreamTarget(target));
+                        string json = "{\"status\":\"view_switched\",\"target\":\"" + EscapeJson(target) + "\"}";
+                        byte[] body = Encoding.UTF8.GetBytes(json);
+                        writer.Write($"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n{json}");
+                    }
+                    // 7. ACTION ENDPOINT (/api/action?type=...&client=...)
                     else if (url.StartsWith("/api/action"))
                     {
                         int qIdx = url.IndexOf('?');
@@ -1046,6 +2061,8 @@ namespace HoloBridge.Collaboration
                                     else if (act == "explode") EnqueueMainThread(() => SharedDigitalTwinAssembly.Instance?.ToggleExplodedView());
                                     else if (act == "xray") EnqueueMainThread(() => SharedDigitalTwinAssembly.Instance?.ToggleXRay());
                                     else if (act == "theme") EnqueueMainThread(() => MetaverseEnvironmentManager.Instance?.NextTheme());
+                                    else if (act == "center") EnqueueMainThread(() => CenterCameraView());
+                                    else if (act == "join") EnqueueMainThread(() => JoinAsLocalOperator());
                                 }
                             }
                         }
@@ -1053,7 +2070,7 @@ namespace HoloBridge.Collaboration
                         byte[] body = Encoding.UTF8.GetBytes(json);
                         writer.Write($"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n{json}");
                     }
-                    // 5. MAIN WEB CONTROLLER HTML WITH LIVE EMBEDDED STREAM
+                    // 8. MAIN WEB CONTROLLER HTML WITH LIVE EMBEDDED STREAM
                     else
                     {
                         string html = GetMobileControllerHtml();
@@ -1090,14 +2107,14 @@ namespace HoloBridge.Collaboration
                     {
                         DeviceRole.VRHeadset => "VR",
                         DeviceRole.DesktopPC => "PC",
-                        _ => "Mobile"
+                        _ => (av.clientId.StartsWith("web") ? "Web" : "Mobile")
                     };
                     sb.Append($"{{\"id\":\"{EscapeJson(av.clientId)}\",\"name\":\"{EscapeJson(av.displayName)}\",\"role\":\"{roleStr}\",\"color\":\"#{hexCol}\"}}");
                 }
             }
 
             int total = vr + pc + mob;
-            return $"{{\"count\":{total},\"vr\":{vr},\"pc\":{pc},\"mobile\":{mob},\"users\":[{sb}]}}";
+            return $"{{\"count\":{total},\"vr\":{vr},\"pc\":{pc},\"mobile\":{mob},\"activeView\":\"{EscapeJson(streamTargetUserId)}\",\"users\":[{sb}]}}";
         }
 
         private static string EscapeJson(string s)
@@ -1136,16 +2153,15 @@ namespace HoloBridge.Collaboration
             {
                 if (participants.ContainsKey(cId)) return;
 
-                int guestIndex = participants.Count - 2;
-                if (guestIndex < 1) guestIndex = 1;
+                int guestIndex = participants.Count + 1;
 
                 Color[] guestPalette = new Color[]
                 {
                     new Color(0.0f, 1.0f, 0.55f),  // Emerald
-                    new Color(1.0f, 0.0f, 0.75f),  // Magenta
-                    new Color(1.0f, 0.50f, 0.0f),  // Radiant Orange
-                    new Color(0.60f, 0.20f, 1.0f),  // Violet
                     new Color(0.0f, 0.85f, 1.0f),  // Electric Cyan
+                    new Color(1.0f, 0.65f, 0.15f),  // Amber / Gold
+                    new Color(1.0f, 0.0f, 0.75f),  // Magenta
+                    new Color(0.60f, 0.20f, 1.0f),  // Violet
                     new Color(1.0f, 0.85f, 0.10f)  // Cyber Yellow
                 };
                 Color assignedCol = guestPalette[(guestIndex - 1) % guestPalette.Length];
@@ -1155,13 +2171,23 @@ namespace HoloBridge.Collaboration
                 Vector3 guestPos = new Vector3(Mathf.Sin(angle) * 1.30f, 0f, -Mathf.Cos(angle) * 1.30f);
                 Quaternion guestRot = Quaternion.LookRotation(-guestPos);
 
-                string guestName = $"📱 Mobile Guest #{guestIndex}";
-                var newAvatar = CreateHumanoidAvatar(cId, guestName, assignedCol, DeviceRole.MobileTablet, guestPos, guestRot);
+                string guestName = cId.StartsWith("web") ? $"🌐 Web Operator #{guestIndex}" :
+                                   cId.StartsWith("pc") ? $"🖥️ PC Operator #{guestIndex}" :
+                                   cId.StartsWith("vr") ? $"🥽 VR Operator #{guestIndex}" :
+                                   $"📱 Mobile Operator #{guestIndex}";
+
+                DeviceRole assignedRole = cId.StartsWith("web") ? DeviceRole.MobileTablet :
+                                          cId.StartsWith("pc") ? DeviceRole.DesktopPC :
+                                          cId.StartsWith("vr") ? DeviceRole.VRHeadset :
+                                          DeviceRole.MobileTablet;
+
+                var newAvatar = CreateHumanoidAvatar(cId, guestName, assignedCol, assignedRole, guestPos, guestRot);
                 newAvatar.touchCoords = new Vector2(tx, ty);
                 participants[cId] = newAvatar;
+                if (primaryMobileAvatar == null) primaryMobileAvatar = newAvatar;
             }
 
-            OmniOSManager.Instance?.ShowNotificationToast($"👥 New Collaborator Connected: Mobile Guest #{participants.Count - 2}!");
+            OmniOSManager.Instance?.ShowNotificationToast($"👥 New Operator Connected: Operator #{participants.Count}!");
             SpatialAudioEngine.Instance?.PlayThemeChime();
         }
 
@@ -1174,12 +2200,12 @@ namespace HoloBridge.Collaboration
 <title>HoloBridge Live Spatial Controller</title>
 <style>
   * { box-sizing: border-box; }
-  body { background: #07090e; color: #00e5ff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 12px; text-align: center; }
-  h1 { font-size: 16px; color: #00ff88; letter-spacing: 1px; margin: 4px 0 2px 0; text-transform: uppercase; }
+  body { background: #07090e; color: #00e5ff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 10px; text-align: center; user-select: none; }
+  h1 { font-size: 16px; color: #00ff88; letter-spacing: 1.5px; margin: 4px 0 2px 0; text-transform: uppercase; }
   p { font-size: 11px; color: #7ab0d6; margin: 0 0 8px 0; }
   
   /* Live Operator Counter & Badges */
-  .users-card { width: 100%; max-width: 500px; background: rgba(14,24,38,0.85); border: 1.5px solid #00e5ff; border-radius: 10px; margin: 0 auto 10px auto; padding: 8px 12px; box-shadow: 0 0 14px rgba(0,229,255,0.18); }
+  .users-card { width: 100%; max-width: 500px; background: rgba(14,24,38,0.92); border: 1.5px solid #00e5ff; border-radius: 10px; margin: 0 auto 8px auto; padding: 8px 12px; box-shadow: 0 0 14px rgba(0,229,255,0.18); }
   .users-row-main { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
   .live-tag { display: inline-flex; align-items: center; font-size: 11px; font-weight: bold; color: #00ff88; letter-spacing: 0.5px; }
   .pulse-dot { width: 8px; height: 8px; background: #00ff88; border-radius: 50%; display: inline-block; margin-right: 6px; box-shadow: 0 0 8px #00ff88; animation: pulse 1.6s infinite; }
@@ -1195,19 +2221,48 @@ namespace HoloBridge.Collaboration
   .user-chip.me { border-color: #00ff88; color: #00ff88; font-weight: bold; }
 
   /* Live Video Feed Container */
-  .feed-box { width: 100%; max-width: 500px; height: 210px; background: #000; border: 2px solid #00e5ff; border-radius: 10px; margin: 0 auto 10px auto; overflow: hidden; position: relative; box-shadow: 0 0 16px rgba(0,229,255,0.25); }
+  .feed-box { width: 100%; max-width: 500px; height: 215px; background: #000; border: 2px solid #00e5ff; border-radius: 10px; margin: 0 auto 8px auto; overflow: hidden; position: relative; box-shadow: 0 0 16px rgba(0,229,255,0.25); cursor: pointer; }
   #liveStream { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .feed-badge { position: absolute; top: 6px; left: 8px; background: rgba(0,0,0,0.75); color: #00ff88; font-size: 10px; font-weight: bold; padding: 3px 8px; border-radius: 4px; border: 1px solid #00ff88; }
-  .fps-badge { position: absolute; top: 6px; right: 8px; background: rgba(0,0,0,0.75); color: #00e5ff; font-size: 10px; font-weight: bold; padding: 3px 8px; border-radius: 4px; border: 1px solid #00e5ff; }
-  
+  .feed-badge { position: absolute; top: 6px; left: 8px; background: rgba(0,0,0,0.75); color: #00ff88; font-size: 10px; font-weight: bold; padding: 3px 8px; border-radius: 4px; border: 1px solid #00ff88; pointer-events: none; }
+  .fps-badge { position: absolute; top: 6px; right: 8px; background: rgba(0,0,0,0.75); color: #00e5ff; font-size: 10px; font-weight: bold; padding: 3px 8px; border-radius: 4px; border: 1px solid #00e5ff; pointer-events: none; }
+  .stream-hint { position: absolute; bottom: 6px; left: 0; width: 100%; font-size: 10px; color: #fff; background: rgba(0,0,0,0.70); padding: 3px 0; pointer-events: none; }
+
+  /* Mode Switch Tabs */
+  .mode-tabs { display: flex; max-width: 500px; margin: 0 auto 8px auto; gap: 6px; }
+  .mode-tab { flex: 1; padding: 8px; font-size: 12px; font-weight: bold; border-radius: 6px; border: 1.5px solid #00e5ff; background: #0c1624; color: #7ab0d6; cursor: pointer; }
+  .mode-tab.active { background: #00e5ff; color: #000; border-color: #00ff88; box-shadow: 0 0 10px rgba(0,229,255,0.4); }
+
+  /* Multi-Operator Camera Switcher Ribbon */
+  .cam-ribbon { display: flex; gap: 5px; max-width: 500px; margin: 0 auto 6px auto; overflow-x: auto; padding: 4px 2px; align-items: center; }
+  .cam-label { font-size: 10px; font-weight: bold; color: #ffaa00; margin-right: 4px; white-space: nowrap; }
+  .cam-btn { padding: 4px 9px; font-size: 10px; font-weight: bold; background: #0c1624; border: 1.5px solid #00e5ff; color: #7ab0d6; border-radius: 5px; cursor: pointer; white-space: nowrap; transition: 0.15s; }
+  .cam-btn:active { transform: scale(0.95); }
+  .cam-btn.active { background: #00e5ff; color: #000; border-color: #00ff88; box-shadow: 0 0 10px rgba(0,229,255,0.4); font-weight: 900; }
+  .user-chip { font-size: 9px; padding: 3px 7px; border-radius: 5px; border: 1px solid #4e7899; background: #09111c; color: #cfe6f8; cursor: pointer; transition: 0.15s; }
+  .user-chip:hover { transform: scale(1.05); }
+  .user-chip.active-view { box-shadow: 0 0 8px #00ff88; font-weight: bold; }
+  .user-chip.me { border-color: #00ff88; color: #00ff88; font-weight: bold; }
+
+  /* D-PAD Locomotion Deck */
+  #walkDeck { max-width: 500px; margin: 0 auto 8px auto; background: rgba(14,24,38,0.92); border: 1.5px solid #00ff88; border-radius: 10px; padding: 10px; box-shadow: 0 0 14px rgba(0,255,136,0.18); }
+  .dpad-container { display: flex; justify-content: space-around; align-items: center; gap: 8px; }
+  .dpad-grid { display: grid; grid-template-columns: 52px 52px 52px; grid-template-rows: 44px 44px 44px; gap: 5px; justify-content: center; }
+  .nav-btn { background: #13273e; border: 1.5px solid #00e5ff; color: #00ff88; font-size: 16px; font-weight: bold; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; touch-action: manipulation; transition: 0.1s; }
+  .nav-btn:active { background: #00ff88; color: #000; transform: scale(0.94); }
+  .nav-btn.special { background: #1a1a2e; border-color: #ffaa00; color: #ffaa00; font-size: 11px; }
+  .turn-col { display: flex; flex-direction: column; gap: 6px; }
+  .turn-btn { padding: 9px 12px; font-size: 11px; font-weight: bold; background: #13273e; border: 1.5px solid #00e5ff; color: #00e5ff; border-radius: 6px; cursor: pointer; }
+  .turn-btn:active { background: #00e5ff; color: #000; }
+  .walk-hint { font-size: 10px; color: #5a8aa8; margin-top: 6px; }
+
   /* Spatial Touchpad */
-  #touchpad { width: 100%; max-width: 500px; height: 210px; background: radial-gradient(circle, #102030 0%, #080c14 100%); border: 2px solid #00ff88; border-radius: 10px; margin: 0 auto 10px auto; touch-action: none; position: relative; cursor: crosshair; }
-  #puck { width: 34px; height: 34px; background: #00ff88; border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 14px #00ff88; }
+  #laserDeck { width: 100%; max-width: 500px; height: 175px; background: radial-gradient(circle, #102030 0%, #080c14 100%); border: 2px solid #00ff88; border-radius: 10px; margin: 0 auto 8px auto; touch-action: none; position: relative; cursor: crosshair; display: none; }
+  #puck { width: 32px; height: 32px; background: #00ff88; border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 14px #00ff88; }
   .pad-hint { position: absolute; bottom: 6px; left: 0; width: 100%; font-size: 10px; color: #5a8aa8; pointer-events: none; }
   
   /* Action Deck Buttons */
   .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-width: 500px; margin: 0 auto; }
-  .btn { width: 100%; padding: 12px 6px; font-size: 13px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; color: #000; text-transform: uppercase; }
+  .btn { width: 100%; padding: 11px 6px; font-size: 12px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; color: #000; text-transform: uppercase; }
   .btn-peel { background: linear-gradient(90deg, #00ff88, #00e5ff); }
   .btn-explode { background: #ffaa00; }
   .btn-xray { background: #00bfff; }
@@ -1217,31 +2272,87 @@ namespace HoloBridge.Collaboration
 </head>
 <body>
 <h1>HoloBridge Spatial Hub</h1>
-<p>Live 3D Multi-Device Spatial Interaction &bull; IEEE VR 2027</p>
+<p>Live 3D Multi-Device Spatial Computing &bull; IEEE VR 2027</p>
 
-<!-- Live Connected Collaborators / Operators Bar -->
+<!-- Live Connected Operators / Collaborators Bar (Starts at 0) -->
 <div class='users-card'>
   <div class='users-row-main'>
     <div class='live-tag'><span class='pulse-dot'></span> LIVE OPERATORS</div>
-    <div class='total-badge'>👥 <span id='userCount'>3</span> ACTIVE</div>
+    <div class='total-badge'>👥 <span id='userCount'>0</span> ACTIVE</div>
   </div>
   <div class='roles-pills'>
-    <span class='role-pill vr'>🥽 VR: <b id='vrCount'>1</b></span>
-    <span class='role-pill pc'>🖥️ PC: <b id='pcCount'>1</b></span>
-    <span class='role-pill mob'>📱 Mobile: <b id='mobCount'>1</b></span>
+    <span class='role-pill vr'>🥽 VR: <b id='vrCount'>0</b></span>
+    <span class='role-pill pc'>🖥️ PC: <b id='pcCount'>0</b></span>
+    <span class='role-pill mob'>📱 Mobile: <b id='mobCount'>0</b></span>
   </div>
   <div class='users-list' id='userChips'></div>
 </div>
 
-<!-- Live Camera Viewport from Unity Editor -->
-<div class='feed-box'>
-  <div class='feed-badge'>🔴 LIVE SPATIAL STREAM</div>
-  <div class='fps-badge' id='fpsCounter'>25 FPS</div>
-  <img id='liveStream' src='/api/frame' alt='Connecting to Unity Live View...' />
+<!-- Multi-Operator Camera Switcher Ribbon -->
+<div class='cam-ribbon'>
+  <span class='cam-label'>📹 VIEW:</span>
+  <button class='cam-btn active' id='camBtn_main' onclick='switchPerspective(""main"", ""🖥️ Host PC"")'>🖥️ Host</button>
+  <button class='cam-btn' id='camBtn_birds_eye' onclick='switchPerspective(""birds_eye"", ""🦅 Bird'\''s Eye View"")'>🦅 Bird's Eye</button>
+  <button class='cam-btn' id='camBtn_arena' onclick='switchPerspective(""arena"", ""🌐 Arena Overhead"")'>🌐 Arena</button>
+  <button class='cam-btn' id='camBtn_vr_local' onclick='switchPerspective(""vr_local"", ""🥽 VR Lead"")'>🥽 VR</button>
+  <span id='dynamicUserCamBtns' style='display:contents;'></span>
 </div>
 
-<!-- 3D Optical Laser Touchpad -->
-<div id='touchpad'>
+<!-- Live Camera Viewport from Unity Engine (Click to Interact) -->
+<div class='feed-box' id='feedContainer' onclick='handleStreamClick(event)'>
+  <div class='feed-badge' id='streamBadge'>🔴 LIVE FEED: 🖥️ HOST VIEW</div>
+  <div class='fps-badge' id='fpsCounter'>25 FPS</div>
+  <img id='liveStream' src='/api/frame' alt='Connecting to Unity Live View...' />
+  <div class='stream-hint'>👆 Click anywhere on 3D Video to interact &bull; Click Users above to switch live view</div>
+</div>
+
+<!-- Active Multi-Platform Control Ribbon -->
+<div id='controlTargetBanner' style='background:#0e1e30; border:1px solid #00ff88; color:#00ff88; font-size:11px; font-weight:bold; padding:6px 12px; border-radius:6px; margin:0 auto 8px auto; max-width:500px; display:flex; justify-content:space-between; align-items:center;'>
+  <span>🎮 ACTIVE CONTROL: <span id='controllingTargetName' style='color:#00e5ff;'>🖥️ Host Player</span></span>
+  <span style='font-size:9px; color:#ffaa00; background:rgba(255,170,0,0.18); border:1px solid #ffaa00; padding:2px 6px; border-radius:3px;'>ALL PLATFORMS ENABLED</span>
+</div>
+
+<!-- Mode Switch Tabs -->
+<div class='mode-tabs'>
+  <button class='mode-tab active' id='tabWalk' onclick='switchMode(""walk"")'>🕹️ WALK & EXPLORE IN 3D</button>
+  <button class='mode-tab' id='tabLaser' onclick='switchMode(""laser"")'>🎯 3D LASER TOUCHPAD</button>
+</div>
+
+<!-- 1. D-PAD & Height Locomotion Panel -->
+<div id='walkDeck'>
+  <div class='dpad-container'>
+    <!-- Left Column: Fly & Crouch -->
+    <div class='turn-col'>
+      <button class='turn-btn' onclick='sendMove(0,0,0,1)'>🔺 Fly Up</button>
+      <button class='turn-btn' onclick='sendMove(0,0,0,-1)'>🔻 Crouch</button>
+      <button class='turn-btn' style='color:#ffaa00; border-color:#ffaa00;' onclick='callAction(""center"")'>🔄 Reset Cam</button>
+    </div>
+
+    <!-- Center: Standard D-Pad -->
+    <div class='dpad-grid'>
+      <div></div>
+      <button class='nav-btn' onclick='sendMove(0,1,0,0)'>⬆ W</button>
+      <div></div>
+      <button class='nav-btn' onclick='sendMove(-1,0,0,0)'>⬅ A</button>
+      <button class='nav-btn special' onclick='callAction(""center"")'>●</button>
+      <button class='nav-btn' onclick='sendMove(1,0,0,0)'>➡ D</button>
+      <div></div>
+      <button class='nav-btn' onclick='sendMove(0,-1,0,0)'>⬇ S</button>
+      <div></div>
+    </div>
+
+    <!-- Right Column: Rotation -->
+    <div class='turn-col'>
+      <button class='turn-btn' onclick='sendMove(0,0,-1,0)'>↺ Turn Left</button>
+      <button class='turn-btn' onclick='sendMove(0,0,1,0)'>↻ Turn Right</button>
+      <button class='turn-btn' style='color:#00ff88; border-color:#00ff88;' onclick='callAction(""join"")'>+ Join 3D</button>
+    </div>
+  </div>
+  <div class='walk-hint'>💡 On PC: Press W/A/S/D or Arrow keys on keyboard to walk around in Unity</div>
+</div>
+
+<!-- 2. 3D Optical Laser Touchpad -->
+<div id='laserDeck'>
   <div id='puck'></div>
   <div class='pad-hint'>Touch & Drag to Aim 3D Avatar Laser in Unity</div>
 </div>
@@ -1260,10 +2371,34 @@ namespace HoloBridge.Collaboration
   // Generate unique client ID per device/tab
   let myClientId = sessionStorage.getItem('holobridge_client_id');
   if (!myClientId) {
-    myClientId = 'guest_' + Math.floor(Math.random() * 8999 + 1000);
+    myClientId = 'web_guest_' + Math.floor(Math.random() * 8999 + 1000);
     sessionStorage.setItem('holobridge_client_id', myClientId);
   }
-  document.getElementById('clientStatus').innerText = 'Connected as: ' + myClientId + ' (3D Avatar Active in Unity)';
+  document.getElementById('clientStatus').innerText = 'Connected as: ' + myClientId + ' (3D Human Avatar Walking Active)';
+  fetch('/api/touch?client=' + encodeURIComponent(myClientId) + '&x=0.5&y=0.5').catch(e=>{});
+
+  let activeTargetView = 'main';
+
+  function switchPerspective(targetId, targetName) {
+    activeTargetView = targetId;
+    fetch('/api/view?client=' + myClientId + '&target=' + encodeURIComponent(targetId));
+    document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById('camBtn_' + targetId);
+    if (btn) btn.classList.add('active');
+    document.getElementById('streamBadge').innerText = '🔴 LIVE FEED: ' + (targetName || targetId).toUpperCase();
+    const ctrlTarget = document.getElementById('controllingTargetName');
+    if (ctrlTarget) ctrlTarget.innerText = (targetName || targetId);
+    if (navigator.vibrate) navigator.vibrate(20);
+  }
+
+  // Switch between Walk Navigation and Laser Pointer
+  function switchMode(m) {
+    const isWalk = m === 'walk';
+    document.getElementById('tabWalk').className = 'mode-tab' + (isWalk ? ' active' : '');
+    document.getElementById('tabLaser').className = 'mode-tab' + (!isWalk ? ' active' : '');
+    document.getElementById('walkDeck').style.display = isWalk ? 'block' : 'none';
+    document.getElementById('laserDeck').style.display = !isWalk ? 'block' : 'none';
+  }
 
   // 0. Poll Active Operators & Device Roster
   function pollUsers() {
@@ -1275,15 +2410,33 @@ namespace HoloBridge.Collaboration
         document.getElementById('vrCount').innerText = d.vr;
         document.getElementById('pcCount').innerText = d.pc;
         document.getElementById('mobCount').innerText = d.mobile;
+        
         const chips = document.getElementById('userChips');
         chips.innerHTML = '';
+        const dynCam = document.getElementById('dynamicUserCamBtns');
+        if (dynCam) dynCam.innerHTML = '';
+
         if (d.users) {
           d.users.forEach(u => {
-            const chip = document.createElement('span');
-            chip.className = 'user-chip' + (u.id === myClientId ? ' me' : '');
+            const isTarget = (d.activeView === u.id) || (activeTargetView === u.id);
+
+            // Clickable chip in Users card (Click to switch live feed)
+            const chip = document.createElement('button');
+            chip.className = 'user-chip' + (u.id === myClientId ? ' me' : '') + (isTarget ? ' active-view' : '');
             chip.style.borderColor = u.color;
-            chip.innerText = (u.id === myClientId ? '⭐ ' : '') + u.name;
+            chip.innerHTML = (u.id === myClientId ? '⭐ ' : '👁️ ') + u.name + ' <span style=\'opacity:0.65; font-size:8px;\'>[View]</span>';
+            chip.onclick = function() { switchPerspective(u.id, u.name); };
             chips.appendChild(chip);
+
+            // Dynamic camera button in Ribbon for mobile guests
+            if (dynCam && u.id !== 'vr_local' && u.id !== 'pc_local') {
+              const cBtn = document.createElement('button');
+              cBtn.className = 'cam-btn' + (isTarget ? ' active' : '');
+              cBtn.id = 'camBtn_' + u.id;
+              cBtn.innerText = '📱 ' + u.name.replace('📱 Mobile ', '').replace('📱 ', '');
+              cBtn.onclick = function() { switchPerspective(u.id, u.name); };
+              dynCam.appendChild(cBtn);
+            }
           });
         }
       })
@@ -1292,7 +2445,7 @@ namespace HoloBridge.Collaboration
   setInterval(pollUsers, 1100);
   pollUsers();
 
-  // 1. High-Frequency Live Frame Streamer
+  // 1. High-Frequency Live Frame Streamer (~25 FPS)
   const streamImg = document.getElementById('liveStream');
   const fpsText = document.getElementById('fpsCounter');
   let frameCount = 0;
@@ -1318,12 +2471,46 @@ namespace HoloBridge.Collaboration
   }
   loopFrame();
 
-  // 2. Touchpad Motion Steering
-  const pad = document.getElementById('touchpad');
+  // 2. Direct Click on Video Stream -> 3D Raycast into Unity Scene
+  function handleStreamClick(e) {
+    const rect = streamImg.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+    if (clickX >= 0 && clickX <= rect.width && clickY >= 0 && clickY <= rect.height) {
+      const normX = Math.max(0, Math.min(1, clickX / rect.width));
+      const normY = Math.max(0, Math.min(1, 1.0 - (clickY / rect.height)));
+      fetch('/api/click?client=' + myClientId + '&x=' + normX.toFixed(3) + '&y=' + normY.toFixed(3));
+      if (navigator.vibrate) navigator.vibrate(20);
+    }
+  }
+
+  // 3. Remote Movement Dispatcher (Controls Active Perspective/Avatar)
+  function sendMove(x, z, yaw, y) {
+    if (navigator.vibrate) navigator.vibrate(15);
+    fetch('/api/move?client=' + myClientId + '&target=' + encodeURIComponent(activeTargetView) + '&x=' + x + '&z=' + z + '&yaw=' + yaw + '&y=' + y);
+  }
+    if (navigator.vibrate) navigator.vibrate(15);
+    fetch('/api/move?client=' + myClientId + '&x=' + x + '&z=' + z + '&yaw=' + yaw + '&y=' + y);
+  }
+
+  // PC Keyboard Walking Support in Web Browser
+  window.addEventListener('keydown', function(e) {
+    if (e.target && e.target.tagName === 'INPUT') return;
+    const k = e.key.toLowerCase();
+    if (k === 'w' || k === 'arrowup') { sendMove(0, 1, 0, 0); e.preventDefault(); }
+    else if (k === 's' || k === 'arrowdown') { sendMove(0, -1, 0, 0); e.preventDefault(); }
+    else if (k === 'a' || k === 'arrowleft') { sendMove(-1, 0, 0, 0); e.preventDefault(); }
+    else if (k === 'd' || k === 'arrowright') { sendMove(1, 0, 0, 0); e.preventDefault(); }
+    else if (k === 'e' || k === ' ') { sendMove(0, 0, 0, 1); e.preventDefault(); }
+    else if (k === 'q' || k === 'c') { sendMove(0, 0, 0, -1); e.preventDefault(); }
+  });
+
+  // 4. Touchpad Motion Steering
+  const pad = document.getElementById('laserDeck');
   const puck = document.getElementById('puck');
   let lastSend = 0;
 
-  function handleMove(e) {
+  function handlePadMove(e) {
     const rect = pad.getBoundingClientRect();
     const touch = e.touches ? e.touches[0] : e;
     let x = (touch.clientX - rect.left) / rect.width;
@@ -1340,8 +2527,8 @@ namespace HoloBridge.Collaboration
     }
   }
 
-  pad.addEventListener('touchmove', handleMove);
-  pad.addEventListener('mousemove', (e) => { if (e.buttons === 1) handleMove(e); });
+  pad.addEventListener('touchmove', handlePadMove);
+  pad.addEventListener('mousemove', (e) => { if (e.buttons === 1) handlePadMove(e); });
 
   function callAction(act) {
     if (navigator.vibrate) navigator.vibrate([15, 25, 15]);
@@ -1423,22 +2610,45 @@ namespace HoloBridge.Collaboration
                 fontSize = 11,
                 fontStyle = FontStyle.Bold
             };
-            GUI.Label(new Rect(bannerX, 8, bannerW, bannerH),
-                $"<color=#00ff88>👥 ACTIVE OPERATORS: {totalOperators}</color>  |  <color=#00e5ff>🥽 VR: {vrCount}</color>  <color=#ffaa00>🖥️ PC: {pcCount}</color>  <color=#00ff88>📱 Mobile: {mobCount}</color>  |  <color=#7ab0d6>🌐 Port {webServerPort}</color>",
-                bannerStyle);
+            if (totalOperators == 0)
+            {
+                GUI.Label(new Rect(bannerX, 8, bannerW, bannerH),
+                    $"<color=#38bdf8>👥 ACTIVE OPERATORS: 0</color>  |  <color=#94a3b8>Waiting for operators to connect (Open Web or click '+ Join')...</color>  |  <color=#7ab0d6>🌐 Port {webServerPort}</color>",
+                    bannerStyle);
+            }
+            else
+            {
+                GUI.Label(new Rect(bannerX, 8, bannerW, bannerH),
+                    $"<color=#00ff88>👥 ACTIVE OPERATORS: {totalOperators}</color>  |  <color=#00e5ff>🥽 VR: {vrCount}</color>  <color=#ffaa00>🖥️ PC: {pcCount}</color>  <color=#00ff88>📱 Mobile: {mobCount}</color>  |  <color=#7ab0d6>🌐 Port {webServerPort}</color>",
+                    bannerStyle);
+            }
 
             // 1. Top-Left Collaborative Participant HUD
-            GUILayout.BeginArea(new Rect(16, 55, 340, 155), GUI.skin.box);
+            bool isLocalJoined = participants.ContainsKey("pc_local") || participants.ContainsKey("vr_local") || participants.ContainsKey("web_local");
+            GUILayout.BeginArea(new Rect(16, 55, 390, 195), GUI.skin.box);
             GUILayout.Label("<b>🌐 HOLOBRIDGE MULTI-DEVICE SPATIAL HUB</b>");
-            GUILayout.Label($"<color=#7ab0d6>Web Live Stream:</color> <color=#00ff88>http://{localIpAddress}:{webServerPort}/</color>");
-            GUILayout.Label($"<color=#00e5ff>Active Role [F1]:</color> {activeRole}");
+            GUILayout.Label($"<color=#7ab0d6>Camera Mode:</color> <color=#00e5ff>{currentCameraMode}</color>");
+            GUILayout.Label($"<color=#00e5ff>Active Role [F1]:</color> {activeRole} {(isLocalJoined ? "<color=#00ff88>(Joined)</color>" : "<color=#94a3b8>(Not Joined)</color>")}");
             GUILayout.Label($"<color=#ffaa00>Connected Avatars:</color> {totalOperators} Active in 3D Room");
 
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("F1: Role", GUILayout.Width(75), GUILayout.Height(24))) CycleNextRole();
-            if (GUILayout.Button("T: Theme", GUILayout.Width(75), GUILayout.Height(24))) MetaverseEnvironmentManager.Instance?.NextTheme();
-            if (GUILayout.Button("M: Phone", GUILayout.Width(75), GUILayout.Height(24))) showMobileSimulator = !showMobileSimulator;
-            if (GUILayout.Button("X: Explode", GUILayout.Width(85), GUILayout.Height(24))) SharedDigitalTwinAssembly.Instance?.ToggleExplodedView();
+            if (GUILayout.Button(currentCameraMode == PlayerCameraMode.BirdsEye ? "🦅 Bird's Eye [B]*" : "🦅 Bird's Eye [B]", GUILayout.Width(115), GUILayout.Height(24))) ToggleBirdsEyeView();
+            if (GUILayout.Button(currentCameraMode == PlayerCameraMode.ThirdPerson ? "👤 3rd Person [V]*" : "👤 3rd Person [V]", GUILayout.Width(115), GUILayout.Height(24))) ToggleThirdPersonView();
+            if (GUILayout.Button("🖥️ 1st [F]", GUILayout.Width(65), GUILayout.Height(24))) SetCameraMode(PlayerCameraMode.FirstPerson);
+            if (GUILayout.Button("🌐 Arena", GUILayout.Width(65), GUILayout.Height(24))) SetCameraMode(PlayerCameraMode.ArenaOverview);
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            if (!isLocalJoined)
+            {
+                GUI.backgroundColor = new Color(0f, 0.9f, 0.5f);
+                if (GUILayout.Button("+ Join", GUILayout.Width(65), GUILayout.Height(24))) JoinAsLocalOperator();
+                GUI.backgroundColor = Color.white;
+            }
+            if (GUILayout.Button("F1: Role", GUILayout.Width(70), GUILayout.Height(24))) CycleNextRole();
+            if (GUILayout.Button("T: Theme", GUILayout.Width(70), GUILayout.Height(24))) MetaverseEnvironmentManager.Instance?.NextTheme();
+            if (GUILayout.Button("M: Phone", GUILayout.Width(70), GUILayout.Height(24))) showMobileSimulator = !showMobileSimulator;
+            if (GUILayout.Button("X: Explode", GUILayout.Width(75), GUILayout.Height(24))) SharedDigitalTwinAssembly.Instance?.ToggleExplodedView();
             GUILayout.EndHorizontal();
 
             GUILayout.EndArea();

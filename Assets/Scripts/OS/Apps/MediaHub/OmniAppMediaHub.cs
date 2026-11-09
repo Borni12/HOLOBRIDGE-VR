@@ -124,6 +124,7 @@ namespace OmniOS.Apps.MediaHub
         private SpatialButton3D addressBarBtn;
         private SpatialButton3D homeSearchBarBtn;
         private float cursorBlinkTimer = 0f;
+        private TouchScreenKeyboard touchScreenKeyboard;
 
         // In-World 3D VR Virtual Keyboard Reference
         private OmniOS.Interaction.OmniVRKeyboard3D vrKeyboard;
@@ -169,6 +170,68 @@ namespace OmniOS.Apps.MediaHub
             }
 
             StartCoroutine(PerformSilentInternetCheck());
+        }
+
+        private void OnEnable()
+        {
+            try
+            {
+                var kb = UnityEngine.InputSystem.Keyboard.current;
+                if (kb != null)
+                {
+                    kb.onTextInput += OnNewInputCharTyped;
+                }
+            }
+            catch { }
+        }
+
+        private void OnDisable()
+        {
+            try
+            {
+                var kb = UnityEngine.InputSystem.Keyboard.current;
+                if (kb != null)
+                {
+                    kb.onTextInput -= OnNewInputCharTyped;
+                }
+            }
+            catch { }
+            IsTypingActive = false;
+            isSearchTyping = false;
+            if (vrKeyboard != null && vrKeyboard.IsOpen) vrKeyboard.Hide();
+        }
+
+        private void OnNewInputCharTyped(char c)
+        {
+            if (!isSearchTyping) return;
+
+            if (c == '\b')
+            {
+                if (searchInputBuffer.Length > 0)
+                {
+                    searchInputBuffer = searchInputBuffer.Substring(0, searchInputBuffer.Length - 1);
+                    UpdateAddressBarDisplay();
+                    if (vrKeyboard != null) vrKeyboard.SetPreviewText(searchInputBuffer);
+                }
+                return;
+            }
+
+            if (c == '\r' || c == '\n')
+            {
+                isSearchTyping = false;
+                IsTypingActive = false;
+                UpdateAddressBarDisplay();
+                SubmitSearchQuery(searchInputBuffer);
+                if (vrKeyboard != null) vrKeyboard.Hide();
+                return;
+            }
+
+            if (!char.IsControl(c) && searchInputBuffer.Length < 140)
+            {
+                searchInputBuffer += c;
+                UpdateAddressBarDisplay();
+                if (vrKeyboard != null) vrKeyboard.SetPreviewText(searchInputBuffer);
+            }
         }
 
         private void Update()
@@ -247,6 +310,22 @@ namespace OmniOS.Apps.MediaHub
             }
             catch { }
 
+            // Touch support for Android Tablets / Smartphones
+            if (!mouseClicked)
+            {
+                try
+                {
+                    var ts = UnityEngine.InputSystem.Touchscreen.current;
+                    if (ts != null && ts.primaryTouch.press.wasPressedThisFrame)
+                    {
+                        Vector2 tp = ts.primaryTouch.position.ReadValue();
+                        mousePos = new Vector3(tp.x, tp.y, 0f);
+                        mouseClicked = true;
+                    }
+                }
+                catch { }
+            }
+
             if (!mouseClicked)
             {
                 try
@@ -254,6 +333,11 @@ namespace OmniOS.Apps.MediaHub
                     if (Input.GetMouseButtonDown(0))
                     {
                         mousePos = Input.mousePosition;
+                        mouseClicked = true;
+                    }
+                    else if (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began)
+                    {
+                        mousePos = Input.GetTouch(0).position;
                         mouseClicked = true;
                     }
                 }
@@ -345,6 +429,40 @@ namespace OmniOS.Apps.MediaHub
         {
             if (isSearchTyping)
             {
+                // Native TouchScreenKeyboard sync (Android APK / Mobile touch)
+                if (touchScreenKeyboard != null)
+                {
+                    if (touchScreenKeyboard.status == TouchScreenKeyboard.Status.Visible)
+                    {
+                        if (searchInputBuffer != touchScreenKeyboard.text)
+                        {
+                            searchInputBuffer = touchScreenKeyboard.text;
+                            UpdateAddressBarDisplay();
+                            if (vrKeyboard != null) vrKeyboard.SetPreviewText(searchInputBuffer);
+                        }
+                    }
+                    else if (touchScreenKeyboard.status == TouchScreenKeyboard.Status.Done)
+                    {
+                        searchInputBuffer = touchScreenKeyboard.text;
+                        isSearchTyping = false;
+                        IsTypingActive = false;
+                        UpdateAddressBarDisplay();
+                        SubmitSearchQuery(searchInputBuffer);
+                        if (vrKeyboard != null) vrKeyboard.Hide();
+                        touchScreenKeyboard = null;
+                        return;
+                    }
+                    else if (touchScreenKeyboard.status == TouchScreenKeyboard.Status.Canceled)
+                    {
+                        isSearchTyping = false;
+                        IsTypingActive = false;
+                        UpdateAddressBarDisplay();
+                        if (vrKeyboard != null) vrKeyboard.Hide();
+                        touchScreenKeyboard = null;
+                        return;
+                    }
+                }
+
                 cursorBlinkTimer += Time.unscaledDeltaTime;
                 if (cursorBlinkTimer >= 0.30f)
                 {
@@ -356,7 +474,7 @@ namespace OmniOS.Apps.MediaHub
                         browserViewportText.text = 
                             "🌐 <b>Google Search & Web Address Bar Active</b>\n\n" +
                             $"👉 <b>Input:</b> <color=#00e5ff>\"{(string.IsNullOrEmpty(searchInputBuffer) ? "" : searchInputBuffer)}{cursorSymbol}\"</color>\n\n" +
-                            "• <b>Desktop Mouse:</b> Click any 3D Virtual Key below or Bookmarks above!\n" +
+                            "• <b>Desktop Mouse:</b> Click any 3D Virtual Key below, Bookmarks above, or the On-Screen Dock!\n" +
                             "• <b>PC Keyboard:</b> Type letters, numbers, or words directly on your computer keyboard.\n" +
                             "• <b>Submit:</b> Press [ENTER] or click '🔍 Go ↵' to search Google!";
                     }
@@ -370,7 +488,11 @@ namespace OmniOS.Apps.MediaHub
                     if (kb != null && (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame)) enterPressed = true;
                 }
                 catch { }
-                if (!enterPressed && (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))) enterPressed = true;
+
+                if (!enterPressed)
+                {
+                    try { if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)) enterPressed = true; } catch { }
+                }
 
                 if (enterPressed)
                 {
@@ -390,7 +512,11 @@ namespace OmniOS.Apps.MediaHub
                     if (kb != null && kb.escapeKey.wasPressedThisFrame) escPressed = true;
                 }
                 catch { }
-                if (!escPressed && Input.GetKeyDown(KeyCode.Escape)) escPressed = true;
+
+                if (!escPressed)
+                {
+                    try { if (Input.GetKeyDown(KeyCode.Escape)) escPressed = true; } catch { }
+                }
 
                 if (escPressed)
                 {
@@ -409,7 +535,11 @@ namespace OmniOS.Apps.MediaHub
                     if (kb != null && kb.backspaceKey.wasPressedThisFrame) backspacePressed = true;
                 }
                 catch { }
-                if (!backspacePressed && Input.GetKeyDown(KeyCode.Backspace)) backspacePressed = true;
+
+                if (!backspacePressed)
+                {
+                    try { if (Input.GetKeyDown(KeyCode.Backspace)) backspacePressed = true; } catch { }
+                }
 
                 if (backspacePressed)
                 {
@@ -422,76 +552,185 @@ namespace OmniOS.Apps.MediaHub
                     return;
                 }
 
-                // 4. Character typing via Input.inputString with New Input System keycode fallback
-                string chars = Input.inputString;
-                bool typedAny = false;
-                if (!string.IsNullOrEmpty(chars))
+                // 4. Fallback character typing via legacy Input.inputString when enabled
+                try
                 {
-                    foreach (char c in chars)
+                    string chars = Input.inputString;
+                    if (!string.IsNullOrEmpty(chars))
                     {
-                        if (c == '\b' || c == '\n' || c == '\r') continue;
-                        if (!char.IsControl(c) && searchInputBuffer.Length < 140)
+                        bool typedAny = false;
+                        foreach (char c in chars)
                         {
-                            searchInputBuffer += c;
-                            typedAny = true;
-                        }
-                    }
-                }
-
-                // Fallback for standalone PC when inputString is empty
-                if (!typedAny)
-                {
-                    if (Input.GetKeyDown(KeyCode.Space))
-                    {
-                        if (searchInputBuffer.Length < 140) { searchInputBuffer += " "; typedAny = true; }
-                    }
-                    else if (Input.GetKeyDown(KeyCode.Period))
-                    {
-                        if (searchInputBuffer.Length < 140) { searchInputBuffer += "."; typedAny = true; }
-                    }
-                    else
-                    {
-                        for (KeyCode k = KeyCode.A; k <= KeyCode.Z; k++)
-                        {
-                            if (Input.GetKeyDown(k))
+                            if (c == '\b' || c == '\n' || c == '\r') continue;
+                            if (!char.IsControl(c) && searchInputBuffer.Length < 140)
                             {
-                                bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-                                char c = shift ? (char)('A' + (k - KeyCode.A)) : (char)('a' + (k - KeyCode.A));
-                                if (searchInputBuffer.Length < 140) { searchInputBuffer += c; typedAny = true; }
-                                break;
+                                searchInputBuffer += c;
+                                typedAny = true;
                             }
                         }
-                        if (!typedAny)
+                        if (typedAny)
                         {
-                            for (KeyCode k = KeyCode.Alpha0; k <= KeyCode.Alpha9; k++)
-                            {
-                                if (Input.GetKeyDown(k))
-                                {
-                                    char c = (char)('0' + (k - KeyCode.Alpha0));
-                                    if (searchInputBuffer.Length < 140) { searchInputBuffer += c; typedAny = true; }
-                                    break;
-                                }
-                            }
+                            UpdateAddressBarDisplay();
+                            if (vrKeyboard != null) vrKeyboard.SetPreviewText(searchInputBuffer);
                         }
                     }
                 }
-
-                if (typedAny)
-                {
-                    UpdateAddressBarDisplay();
-                    if (vrKeyboard != null) vrKeyboard.SetPreviewText(searchInputBuffer);
-                }
+                catch { }
             }
             else
             {
                 // Keyboard shortcuts for Android Tablet navigation (active when tablet is open and not typing)
                 if (spatialWindow != null && spatialWindow.IsOpen)
                 {
-                    if (Input.GetKeyDown(KeyCode.Escape) && currentTab != HubTab.HomeScreen)
+                    try
                     {
-                        SwitchTab(HubTab.HomeScreen);
+                        if (Input.GetKeyDown(KeyCode.Escape) && currentTab != HubTab.HomeScreen)
+                        {
+                            SwitchTab(HubTab.HomeScreen);
+                        }
+                    }
+                    catch { }
+                }
+            }
+        }
+
+        private void OnGUI()
+        {
+            Event e = Event.current;
+            if (e != null)
+            {
+                OmniGenesis.Core.OmniInputHelper.RegisterGUIEvent(e);
+
+                if (isSearchTyping && e.type == EventType.KeyDown)
+                {
+                    if (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter)
+                    {
+                        isSearchTyping = false;
+                        IsTypingActive = false;
+                        UpdateAddressBarDisplay();
+                        SubmitSearchQuery(searchInputBuffer);
+                        if (vrKeyboard != null) vrKeyboard.Hide();
+                        e.Use();
+                        return;
+                    }
+                    if (e.keyCode == KeyCode.Escape)
+                    {
+                        isSearchTyping = false;
+                        IsTypingActive = false;
+                        UpdateAddressBarDisplay();
+                        if (vrKeyboard != null) vrKeyboard.Hide();
+                        e.Use();
+                        return;
+                    }
+                    if (e.keyCode == KeyCode.Backspace)
+                    {
+                        if (searchInputBuffer.Length > 0)
+                        {
+                            searchInputBuffer = searchInputBuffer.Substring(0, searchInputBuffer.Length - 1);
+                            UpdateAddressBarDisplay();
+                            if (vrKeyboard != null) vrKeyboard.SetPreviewText(searchInputBuffer);
+                        }
+                        e.Use();
+                        return;
+                    }
+                    if (e.character != '\0' && !char.IsControl(e.character))
+                    {
+                        if (searchInputBuffer.Length < 140)
+                        {
+                            searchInputBuffer += e.character;
+                            UpdateAddressBarDisplay();
+                            if (vrKeyboard != null) vrKeyboard.SetPreviewText(searchInputBuffer);
+                        }
+                        e.Use();
+                        return;
                     }
                 }
+            }
+
+            // On-Screen Direct Search & Typing Dock when Search is active
+            if (isSearchTyping && (spatialWindow == null || spatialWindow.IsOpen))
+            {
+                DrawSearchTypingDock();
+            }
+        }
+
+        private void DrawSearchTypingDock()
+        {
+            float dockW = Mathf.Min(680f, Screen.width - 40f);
+            float dockH = 88f;
+            float dx = (Screen.width - dockW) * 0.5f;
+            float dy = Screen.height - dockH - 25f;
+
+            GUI.backgroundColor = new Color(0.04f, 0.08f, 0.15f, 0.96f);
+            GUI.Box(new Rect(dx, dy, dockW, dockH), GUIContent.none);
+            GUI.backgroundColor = Color.white;
+
+            GUIStyle titleStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 11,
+                fontStyle = FontStyle.Bold,
+                normal = { textColor = new Color(0f, 0.9f, 1f) }
+            };
+            GUI.Label(new Rect(dx + 12, dy + 6, dockW - 24, 18), "🌐 Google Search & URL Bar  [Type with PC Keyboard, 3D VR Keys, or click below]", titleStyle);
+
+            Rect tfRect = new Rect(dx + 12, dy + 28, dockW - 250, 28);
+            GUIStyle tfStyle = new GUIStyle(GUI.skin.textField)
+            {
+                fontSize = 13,
+                fontStyle = FontStyle.Bold
+            };
+            string newBuf = GUI.TextField(tfRect, searchInputBuffer, 140, tfStyle);
+            if (newBuf != searchInputBuffer)
+            {
+                searchInputBuffer = newBuf;
+                UpdateAddressBarDisplay();
+                if (vrKeyboard != null) vrKeyboard.SetPreviewText(searchInputBuffer);
+            }
+
+            // Quick buttons
+            GUI.backgroundColor = new Color(0f, 0.85f, 0.45f);
+            if (GUI.Button(new Rect(dx + dockW - 230, dy + 28, 70, 28), "🔍 Search"))
+            {
+                isSearchTyping = false;
+                IsTypingActive = false;
+                UpdateAddressBarDisplay();
+                SubmitSearchQuery(searchInputBuffer);
+                if (vrKeyboard != null) vrKeyboard.Hide();
+            }
+
+            GUI.backgroundColor = new Color(0.85f, 0.35f, 0.35f);
+            if (GUI.Button(new Rect(dx + dockW - 152, dy + 28, 65, 28), "✕ Clear"))
+            {
+                ClearSearchInput();
+            }
+
+            GUI.backgroundColor = new Color(0.35f, 0.45f, 0.55f);
+            if (GUI.Button(new Rect(dx + dockW - 78, dy + 28, 65, 28), "Close"))
+            {
+                isSearchTyping = false;
+                IsTypingActive = false;
+                UpdateAddressBarDisplay();
+                if (vrKeyboard != null) vrKeyboard.Hide();
+            }
+
+            GUI.backgroundColor = Color.white;
+
+            // Row of quick search suggestions
+            float sugY = dy + 60;
+            string[] sugs = new string[] { "IEEE VR 2027", "Metaverse 3DUI", "Digital Twin Turbine", "NASA VR Labs", "OpenXR Quest 3" };
+            float sx = dx + 12;
+            foreach (var s in sugs)
+            {
+                if (GUI.Button(new Rect(sx, sugY, 110, 20), s, GUI.skin.button))
+                {
+                    searchInputBuffer = s;
+                    UpdateAddressBarDisplay();
+                    SubmitSearchQuery(s);
+                    isSearchTyping = false;
+                    IsTypingActive = false;
+                    if (vrKeyboard != null) vrKeyboard.Hide();
+                }
+                sx += 116;
             }
         }
 
@@ -524,6 +763,15 @@ namespace OmniOS.Apps.MediaHub
             }
             SpatialAudioEngine.Instance?.PlayButtonClick();
             OmniOSManager.Instance?.ShowNotificationToast("⌨️ Virtual Keyboard Active: Type with 3D keys or PC keyboard");
+
+            try
+            {
+                if (TouchScreenKeyboard.isSupported)
+                {
+                    touchScreenKeyboard = TouchScreenKeyboard.Open(searchInputBuffer, TouchScreenKeyboardType.Search, false, false, false, false, "Search Google or type URL");
+                }
+            }
+            catch { }
         }
 
         public void ClearSearchInput()
@@ -2054,13 +2302,6 @@ namespace OmniOS.Apps.MediaHub
         }
 
         #endregion
-
-        private void OnDisable()
-        {
-            isSearchTyping = false;
-            IsTypingActive = false;
-            if (vrKeyboard != null && vrKeyboard.IsOpen) vrKeyboard.Hide();
-        }
 
         private void OnDestroy()
         {

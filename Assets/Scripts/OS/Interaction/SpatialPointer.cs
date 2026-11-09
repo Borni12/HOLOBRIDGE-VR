@@ -27,11 +27,6 @@ namespace OmniOS.Interaction
         [SerializeField] private LayerMask interactionLayers = ~0;
         [SerializeField] private float beamWidth = 0.0035f;
 
-        [Header("Desktop Navigation")]
-        [SerializeField] private bool enableDesktopControls = true;
-        [SerializeField] private float mouseSensitivity = 2.4f;
-        [SerializeField] private float moveSpeed = 3.2f;
-
         // Visuals
         private LineRenderer lineRenderer;
         private Transform cursorDot;
@@ -71,7 +66,6 @@ namespace OmniOS.Interaction
         private float lastMouseActivityTime = 1f;
         private float lastVRActivityTime = -10f;
         private bool isUsingVR = false;
-        private bool wasLookingLastFrame = false;
 
         private static SpatialPointer instance;
         public static SpatialPointer Instance
@@ -186,138 +180,8 @@ namespace OmniOS.Interaction
 
         private void UpdateDesktopNavigation()
         {
-            if (headCameraTransform == null)
-            {
-                var cam = OmniGenesis.Core.OmniInputHelper.ResolveActiveCamera();
-                if (cam != null) headCameraTransform = cam.transform;
-            }
-            if (!enableDesktopControls || headCameraTransform == null) return;
-
-            // 1. Right-click drag to look around the Metaverse room freely (360 degrees)
-            bool isLooking = false;
-            try { isLooking = Input.GetMouseButton(1); } catch { }
-            try
-            {
-                var mouse = UnityEngine.InputSystem.Mouse.current;
-                if (mouse != null && mouse.rightButton.isPressed) isLooking = true;
-            } catch { }
-
-            if (isLooking)
-            {
-                if (!wasLookingLastFrame)
-                {
-                    Vector3 euler = headCameraTransform.eulerAngles;
-                    cameraYaw = euler.y;
-                    cameraPitch = euler.x > 180f ? (euler.x - 360f) : euler.x;
-                }
-
-                Cursor.lockState = CursorLockMode.Locked;
-                Cursor.visible = false;
-
-                float mouseX = 0f;
-                float mouseY = 0f;
-
-                // Priority 1: New Input System mouse.delta (Unity 6 high-precision native)
-                try
-                {
-                    var mouse = UnityEngine.InputSystem.Mouse.current;
-                    if (mouse != null)
-                    {
-                        Vector2 d = mouse.delta.ReadValue();
-                        mouseX = d.x * 0.12f * mouseSensitivity;
-                        mouseY = d.y * 0.12f * mouseSensitivity;
-                    }
-                }
-                catch { }
-
-                // Priority 2: Legacy Input.GetAxis fallback
-                if (Mathf.Abs(mouseX) < 0.001f && Mathf.Abs(mouseY) < 0.001f)
-                {
-                    try
-                    {
-                        mouseX = Input.GetAxis("Mouse X") * mouseSensitivity * 1.5f;
-                        mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity * 1.5f;
-                    }
-                    catch { }
-                }
-
-                cameraYaw += mouseX;
-                cameraPitch = Mathf.Clamp(cameraPitch - mouseY, -85f, 85f);
-                headCameraTransform.rotation = Quaternion.Euler(cameraPitch, cameraYaw, 0f);
-            }
-            else
-            {
-                if (Cursor.lockState == CursorLockMode.Locked)
-                {
-                    Cursor.lockState = CursorLockMode.None;
-                    Cursor.visible = true;
-                }
-            }
-            wasLookingLastFrame = isLooking;
-
-            // If user is actively typing in the Android tablet search bar, suspend WASD walk locomotion so keystrokes type text
-            if (OmniOS.Apps.MediaHub.OmniAppMediaHub.IsTypingActive) return;
-
-            // 2. WASD and Arrow keys movement around the Metaverse lounge
-            float moveX = 0f;
-            float moveZ = 0f;
-
-            try
-            {
-                var kb = UnityEngine.InputSystem.Keyboard.current;
-                if (kb != null)
-                {
-                    if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) moveX -= 1f;
-                    if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) moveX += 1f;
-                    if (kb.wKey.isPressed || kb.upArrowKey.isPressed) moveZ += 1f;
-                    if (kb.sKey.isPressed || kb.downArrowKey.isPressed) moveZ -= 1f;
-                }
-            } catch { }
-
-            if (Mathf.Abs(moveX) < 0.01f)
-            {
-                if (Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.A)) moveX = -1f;
-                else if (Input.GetKey(KeyCode.RightArrow) || Input.GetKey(KeyCode.D)) moveX = 1f;
-            }
-            if (Mathf.Abs(moveZ) < 0.01f)
-            {
-                if (Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.S)) moveZ = -1f;
-                else if (Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.W)) moveZ = 1f;
-            }
-
-            float currentSpeed = moveSpeed * (Input.GetKey(KeyCode.LeftShift) ? 1.75f : 1.0f);
-
-            // Vertical movement: strictly E for fly up, Q for down (Space is reserved for Recenter)
-            if (Input.GetKey(KeyCode.E))
-            {
-                headCameraTransform.position += Vector3.up * (currentSpeed * Time.deltaTime);
-            }
-            if (Input.GetKey(KeyCode.Q) || Input.GetKey(KeyCode.C))
-            {
-                headCameraTransform.position += Vector3.down * (currentSpeed * Time.deltaTime);
-            }
-
-            if (Mathf.Abs(moveX) > 0.01f || Mathf.Abs(moveZ) > 0.01f)
-            {
-                Vector3 fwd = headCameraTransform.forward;
-                fwd.y = 0;
-                fwd.Normalize();
-
-                Vector3 right = headCameraTransform.right;
-                right.y = 0;
-                right.Normalize();
-
-                Vector3 delta = (fwd * moveZ + right * moveX) * (currentSpeed * Time.deltaTime);
-                headCameraTransform.position += delta;
-            }
-
-            // Ground-level stability clamp: camera can NEVER sink into or fall below the floor!
-            if (headCameraTransform.position.y < 1.45f)
-            {
-                Vector3 pos = headCameraTransform.position;
-                pos.y = 1.60f;
-                headCameraTransform.position = pos;
-            }
+            // Desktop navigation and mouse look are managed by OmniSpatialLocomotion.
+            // SpatialPointer focuses strictly on high-precision laser reticle and interactive 3D UI raycasting.
         }
 
         private void UpdateInput()
