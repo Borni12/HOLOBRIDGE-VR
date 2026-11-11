@@ -1424,16 +1424,25 @@ namespace HoloBridge.Collaboration
                 case "third_person":
                 case "third":
                 case "3rd":
+                case "avatar":
                     SetCameraMode(PlayerCameraMode.ThirdPerson);
                     break;
                 case "first_person":
                 case "first":
                 case "1st":
+                case "main":
+                case "host":
+                case "pc":
                     SetCameraMode(PlayerCameraMode.FirstPerson);
                     break;
                 case "arena":
                 case "overview":
+                case "arenaoverview":
                     SetCameraMode(PlayerCameraMode.ArenaOverview);
+                    break;
+                case "vr":
+                case "vr_local":
+                    SetCameraMode(PlayerCameraMode.FirstPerson);
                     break;
             }
         }

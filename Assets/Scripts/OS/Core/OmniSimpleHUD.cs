@@ -70,6 +70,9 @@ namespace OmniOS.Core
         {
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
+#if UNITY_WEBGL
+            isMinimized = true; // Start compact in WebGL for zero clutter and wide-angle 3D view
+#endif
             ShowToast("OMNIOS PRO ONLINE - System Ready", new Color(0.0f, 1.0f, 0.7f), 3.5f);
         }
 

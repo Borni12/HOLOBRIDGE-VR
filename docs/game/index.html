@@ -282,6 +282,7 @@
 
           <!-- Scene Actions & Competition Tour -->
           <div class="btn-cluster">
+            <button class="hub-btn" id="btn_perf_toggle" onclick="cycleQualityMode()" style="background:rgba(0,255,136,0.18); border-color:#00ff88; color:#00ff88;" title="Toggle Graphic Fidelity (Turbo 60 FPS for Low Spec & Mobile)">⚡ TURBO (60 FPS)</button>
             <button class="hub-btn action" onclick="triggerAction('theme')">🎨 THEME</button>
             <button class="hub-btn action" onclick="triggerAction('explode')">💥 EXPLODE</button>
             <button class="hub-btn action" onclick="triggerAction('role')">🔀 ROLE</button>
@@ -358,9 +359,10 @@
       window.Module.arguments = [];
       window.Module.unityFileSystemInit = function() {};
 
-      // Device & Performance Optimization Profile (Ensures smooth 60 FPS on low-spec phones & laptops)
+      // Device & Performance Optimization Profile (Ensures smooth 60 FPS on low-spec phones, tablets & laptops)
       var isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-      var isLowSpec = isMobile || 
+      var isTablet = /iPad|Tablet/i.test(navigator.userAgent) || (navigator.maxTouchPoints && navigator.maxTouchPoints > 1 && window.innerWidth >= 768);
+      var isLowSpec = isMobile || isTablet || 
                       (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) || 
                       (navigator.deviceMemory && navigator.deviceMemory <= 4);
 
@@ -368,6 +370,8 @@
       // Uses direct uncompressed buffers (.data, .framework.js, .wasm) for 100% reliable execution without gzip header dependencies
       var buildUrl = "Build";
       var loaderUrl = buildUrl + "/WebGL.loader.js";
+      var currentQualityMode = isLowSpec ? 'turbo' : 'balanced'; // 'turbo' | 'balanced' | 'ultra'
+
       var config = {
         arguments: [],
         dataUrl: buildUrl + "/WebGL.data",
@@ -378,19 +382,52 @@
         productName: "HOLOBRIDGE VR",
         productVersion: "0.2",
         showBanner: unityShowBanner,
+        matchWebGLToCanvasSize: false,
+        devicePixelRatio: isLowSpec ? 1.0 : Math.min(window.devicePixelRatio || 1, 1.25),
         webglContextAttributes: {
           preserveDrawingBuffer: false,
           powerPreference: "high-performance",
-          desynchronized: true
+          desynchronized: true,
+          antialias: !isLowSpec,
+          depth: true,
+          stencil: false,
+          failIfMajorPerformanceCaveat: false
         }
       };
 
-      // Adaptive Dynamic Canvas Resizing (Prevents GPU VRAM exhaustion on budget devices)
+      // Adaptive Dynamic Canvas Resizing & Graphics Quality Control
+      function setQualityMode(mode) {
+        currentQualityMode = mode;
+        var scale = 1.0;
+        if (mode === 'turbo') scale = 0.75; // Low-spec mobile, tablet & budget laptop: 0.75x (720p or lower, massive FPS boost!)
+        else if (mode === 'balanced') scale = 1.0; // Crisp native 1.0x DPR
+        else if (mode === 'ultra') scale = Math.min(window.devicePixelRatio || 1, 1.35);
+
+        var w = window.innerWidth || document.documentElement.clientWidth || 800;
+        var h = window.innerHeight || document.documentElement.clientHeight || 600;
+        canvas.width = Math.round(w * scale);
+        canvas.height = Math.round(h * scale);
+
+        const btn = document.getElementById('btn_perf_toggle');
+        if (btn) {
+          const labels = {
+            turbo: '⚡ TURBO (60 FPS)',
+            balanced: '⚖️ BALANCED',
+            ultra: '🚀 ULTRA HD'
+          };
+          btn.innerText = labels[mode] || mode.toUpperCase();
+        }
+        showToast("⚡ GRAPHICS FIDELITY: " + mode.toUpperCase() + (mode === 'turbo' ? ' (MAX 60 FPS SMOOTHNESS)' : ''));
+      }
+
+      function cycleQualityMode() {
+        if (currentQualityMode === 'turbo') setQualityMode('balanced');
+        else if (currentQualityMode === 'balanced') setQualityMode('ultra');
+        else setQualityMode('turbo');
+      }
+
       function resizeCanvas() {
-        var dpr = window.devicePixelRatio || 1;
-        var renderScale = isLowSpec ? 1.0 : Math.min(dpr, 1.35);
-        canvas.width = Math.floor(window.innerWidth * renderScale);
-        canvas.height = Math.floor(window.innerHeight * renderScale);
+        setQualityMode(currentQualityMode);
       }
       window.addEventListener('resize', resizeCanvas);
       resizeCanvas();
@@ -607,6 +644,10 @@
       // =========================================================================
       function setCameraView(viewMode) {
         SpatialAudio.playWhoosh();
+        // Normalize view aliases
+        if (viewMode === 'main' || viewMode === 'host' || viewMode === 'pc') viewMode = 'first_person';
+        if (viewMode === 'vr' || viewMode === 'vr_local') viewMode = 'third_person';
+
         document.querySelectorAll(".hub-btn").forEach(b => {
           if (b.id && b.id.startsWith("btn_")) b.classList.remove("active");
         });
@@ -693,6 +734,8 @@
           setCameraView(e.data.view);
         } else if (e.data.type === 'action') {
           triggerAction(e.data.action);
+        } else if (e.data.type === 'quality') {
+          setQualityMode(e.data.level);
         } else if (e.data.type === 'tour') {
           startCinematicTour();
         } else if (e.data.type === 'ping') {
