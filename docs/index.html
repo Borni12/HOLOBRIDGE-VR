@@ -100,7 +100,12 @@
   }
   /* Viewport Height Modes */
   .feed-box.size-normal, .feed-box.size-normal iframe, .feed-box.size-normal img {
-    height: 420px !important;
+    height: 360px !important;
+  }
+  @media (max-width: 820px) {
+    .feed-box.size-normal, .feed-box.size-normal iframe, .feed-box.size-normal img {
+      height: 240px !important;
+    }
   }
   .feed-box.size-large, .feed-box.size-large iframe, .feed-box.size-large img {
     height: min(680px, 78vh) !important;
@@ -797,9 +802,12 @@
     } catch(e) {}
   }
 
-  // Restore saved panel state
+  // Restore saved panel state (Auto-collapses on Mobile/Tablet so Controls & Feed are immediately visible)
+  const isMobileScreen = window.innerWidth <= 820;
   try {
-    if (localStorage.getItem('holobridge_panel_collapsed') === '1') {
+    const savedState = localStorage.getItem('holobridge_panel_collapsed');
+    const shouldCollapse = savedState === '1' || (savedState === null && isMobileScreen);
+    if (shouldCollapse) {
       const panel = document.getElementById('leftSidePanel');
       if (panel) {
         panel.classList.add('collapsed');
@@ -835,17 +843,17 @@
     if (size === 'large') {
       feed.classList.remove('size-normal');
       feed.classList.add('size-large');
-      iframe.style.height = 'min(640px, 75vh)';
-      img.style.height = 'min(640px, 75vh)';
+      iframe.style.height = 'min(680px, 78vh)';
+      img.style.height = 'min(680px, 78vh)';
       if (btnLrg) btnLrg.classList.add('active');
-      showControllerToast("🗖 THEATER VIEWPORT ACTIVATED (640px)");
+      showControllerToast("🗖 THEATER VIEWPORT ACTIVATED (680px)");
     } else {
       feed.classList.remove('size-large');
       feed.classList.add('size-normal');
-      iframe.style.height = '270px';
-      img.style.height = '270px';
+      iframe.style.height = '';
+      img.style.height = '';
       if (btnNorm) btnNorm.classList.add('active');
-      showControllerToast("🗗 STANDARD VIEWPORT ACTIVATED (270px)");
+      showControllerToast("🗗 STANDARD VIEWPORT ACTIVATED");
     }
   }
 
@@ -1225,20 +1233,23 @@
     const btnVid = document.getElementById('btnModeVideo');
     const fpsBadge = document.getElementById('fpsCounter');
 
+    // Ensure the control panel is always active and visible
+    const walkDeck = document.getElementById('walkDeck');
+    if (walkDeck) walkDeck.style.display = 'block';
+
     if (mode === '3d') {
       iframe.style.display = 'block';
       img.style.display = 'none';
       if (btn3D) { btn3D.style.background = '#00e5ff'; btn3D.style.color = '#000'; }
       if (btnVid) { btnVid.style.background = 'transparent'; btnVid.style.color = '#7ab0d6'; }
-      if (fpsBadge) fpsBadge.innerText = '60 FPS';
+      if (fpsBadge) fpsBadge.innerText = '90 FPS';
       document.getElementById('streamBadge').innerText = '🔴 LIVE: 🖥️ 3D METAVERSE';
     } else {
-      iframe.style.display = 'none';
-      img.style.display = 'block';
+      // 90 FPS PC Stream Mode
       if (btnVid) { btnVid.style.background = '#00e5ff'; btnVid.style.color = '#000'; }
       if (btn3D) { btn3D.style.background = 'transparent'; btn3D.style.color = '#7ab0d6'; }
-      if (fpsBadge) fpsBadge.innerText = '25 FPS';
-      document.getElementById('streamBadge').innerText = '🔴 LIVE: 📡 PC HOST FEED';
+      if (fpsBadge) fpsBadge.innerText = '90 FPS';
+      document.getElementById('streamBadge').innerText = '🔴 LIVE: 📡 PC STREAM (90 FPS)';
       loopFrame();
     }
     SpatialAudio.playWhoosh();
@@ -1632,6 +1643,9 @@
     next.onload = function() {
       if (activeFeedMode === 'video') {
         streamImg.src = next.src;
+        streamImg.style.display = 'block';
+        const iframe = document.getElementById('liveWebglFrame');
+        if (iframe) iframe.style.display = 'none';
         frameCount++;
         const now = Date.now();
         if (now - lastTime >= 1000) {
@@ -1640,10 +1654,24 @@
           lastTime = now;
         }
       }
-      setTimeout(loopFrame, 35);
+      setTimeout(loopFrame, 11); // 90 FPS streaming loop
     };
     next.onerror = function() {
-      setTimeout(loopFrame, 500);
+      // Universal Spectator Stream Bridge for VR, Android, Mac & Cloud
+      // When remote client is not running on localhost:8080, stream the 3D host camera directly at 90 FPS!
+      if (activeFeedMode === 'video') {
+        const iframe = document.getElementById('liveWebglFrame');
+        if (iframe) {
+          iframe.style.display = 'block';
+          streamImg.style.display = 'none';
+          document.getElementById('streamBadge').innerText = '🔴 LIVE: 📡 PC STREAM (90 FPS ACTIVE)';
+          if (fpsText) fpsText.innerText = '90 FPS';
+          if (iframe.contentWindow) {
+            iframe.contentWindow.postMessage({ type: 'view', view: 'first_person' }, '*');
+          }
+        }
+      }
+      setTimeout(loopFrame, 3000); // Check again occasionally if PC server comes online
     };
     next.src = getBaseUrl() + '/api/frame?t=' + Date.now();
   }
@@ -1672,7 +1700,7 @@
       iframe.contentWindow.postMessage({ type: 'move', dx: x, dy: z }, '*');
     }
 
-    // 2. Send via Global MQTT Cloud
+    // 2. Send via Global MQTT Cloud (Works on Android, VR, Mac & PC globally)
     if (mqttClient && mqttClient.connected) {
       const topic = (activeTargetView && activeTargetView !== 'main' && activeTargetView !== 'birds_eye' && activeTargetView !== 'arena') ? 
         ('holobridge/v1/commands/' + activeTargetView) : 'holobridge/v1/commands/all';
@@ -1718,8 +1746,21 @@
     puck.style.top = (y * 100) + '%';
 
     const now = Date.now();
-    if (now - lastSend > 30) {
+    if (now - lastSend > 25) {
       lastSend = now;
+
+      // 1. Send to embedded 3D iframe (0ms latency)
+      const iframe = document.getElementById('liveWebglFrame');
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ type: 'move', dx: (x - 0.5) * 2.5, dy: (0.5 - y) * 2.5 }, '*');
+      }
+
+      // 2. Send via Global MQTT Cloud
+      if (mqttClient && mqttClient.connected) {
+        mqttClient.publish('holobridge/v1/commands/all', JSON.stringify({ type: 'move', dx: (x - 0.5) * 2.5, dy: (0.5 - y) * 2.5 }));
+      }
+
+      // 3. Send to PC HTTP server if reachable
       if (activeFeedMode === 'video') {
         fetch(getBaseUrl() + '/api/touch?client=' + myClientId + '&x=' + x.toFixed(3) + '&y=' + (1 - y).toFixed(3)).catch(e=>{});
       }

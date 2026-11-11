@@ -364,12 +364,12 @@ namespace HoloBridge.Collaboration
             return;
 #endif
 
-            // Low-configuration optimization: Capture frame at ~25 FPS only when a web client is actively viewing the stream
+            // Ultra-responsive high-framerate stream: Capture frame at up to 90 FPS for VR, Android, Mac & PC web clients
             int nowTicks = System.Environment.TickCount;
-            bool hasActiveConsumer = Mathf.Abs(nowTicks - lastFrameRequestTicks) < 3500;
+            bool hasActiveConsumer = Mathf.Abs(nowTicks - lastFrameRequestTicks) < 5000;
 
             frameCaptureTimer += Time.deltaTime;
-            if (hasActiveConsumer && frameCaptureTimer >= 0.04f && streamRenderTexture != null)
+            if (hasActiveConsumer && frameCaptureTimer >= 0.011f && streamRenderTexture != null)
             {
                 frameCaptureTimer = 0f;
                 RenderTexture prev = RenderTexture.active;
@@ -379,7 +379,7 @@ namespace HoloBridge.Collaboration
                 {
                     streamTexture2D.ReadPixels(new Rect(0, 0, StreamWidth, StreamHeight), 0, 0);
                     streamTexture2D.Apply(false);
-                    byte[] jpg = streamTexture2D.EncodeToJPG(55);
+                    byte[] jpg = streamTexture2D.EncodeToJPG(50);
                     lock (streamLock)
                     {
                         latestJpgBytes = jpg;
@@ -2334,7 +2334,7 @@ namespace HoloBridge.Collaboration
 <!-- Live Camera Viewport from Unity Engine (Click to Interact) -->
 <div class='feed-box' id='feedContainer' onclick='handleStreamClick(event)'>
   <div class='feed-badge' id='streamBadge'>🔴 LIVE FEED: 🖥️ HOST VIEW</div>
-  <div class='fps-badge' id='fpsCounter'>25 FPS</div>
+  <div class='fps-badge' id='fpsCounter'>90 FPS</div>
   <img id='liveStream' src='/api/frame' alt='Connecting to Unity Live View...' />
   <div class='stream-hint'>👆 Click anywhere on 3D Video to interact &bull; Click Users above to switch live view</div>
 </div>
@@ -2478,7 +2478,7 @@ namespace HoloBridge.Collaboration
   setInterval(pollUsers, 1100);
   pollUsers();
 
-  // 1. High-Frequency Live Frame Streamer (~25 FPS)
+  // 1. High-Frequency Live Frame Streamer (Ultra-smooth 90 FPS)
   const streamImg = document.getElementById('liveStream');
   const fpsText = document.getElementById('fpsCounter');
   let frameCount = 0;
@@ -2495,10 +2495,10 @@ namespace HoloBridge.Collaboration
         frameCount = 0;
         lastTime = now;
       }
-      setTimeout(loopFrame, 35);
+      setTimeout(loopFrame, 11);
     };
     next.onerror = function() {
-      setTimeout(loopFrame, 250);
+      setTimeout(loopFrame, 100);
     };
     next.src = '/api/frame?t=' + Date.now();
   }
