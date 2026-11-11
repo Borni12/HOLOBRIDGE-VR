@@ -80,6 +80,7 @@ namespace HoloBridge.Collaboration
         private byte[] latestJpgBytes;
         private readonly object streamLock = new object();
         private float frameCaptureTimer = 0f;
+        private int lastFrameRequestTicks = 0;
         private const int StreamWidth = 640;
         private const int StreamHeight = 360;
 
@@ -363,9 +364,12 @@ namespace HoloBridge.Collaboration
             return;
 #endif
 
-            // Capture frame at ~25 FPS
+            // Low-configuration optimization: Capture frame at ~25 FPS only when a web client is actively viewing the stream
+            int nowTicks = System.Environment.TickCount;
+            bool hasActiveConsumer = Mathf.Abs(nowTicks - lastFrameRequestTicks) < 3500;
+
             frameCaptureTimer += Time.deltaTime;
-            if (frameCaptureTimer >= 0.04f && streamRenderTexture != null)
+            if (hasActiveConsumer && frameCaptureTimer >= 0.04f && streamRenderTexture != null)
             {
                 frameCaptureTimer = 0f;
                 RenderTexture prev = RenderTexture.active;
@@ -1194,23 +1198,38 @@ namespace HoloBridge.Collaboration
                     else if (av.role == DeviceRole.DesktopPC) pcCount++;
                     else mobCount++;
 
-                    // Sync local avatar to player camera when in First Person
-                    if (cam != null && currentCameraMode == PlayerCameraMode.FirstPerson && (av.id == GetLocalOperatorId() || av.id == "vr_local" || av.id == "pc_local" || av.id == "web_local"))
-                    {
-                        Vector3 camGround = new Vector3(cam.transform.position.x, 0f, cam.transform.position.z);
-                        float dist = Vector3.Distance(camGround, av.lastPosition);
-                        float instSpeed = dist / Mathf.Max(0.0001f, Time.deltaTime);
-                        av.walkSpeed = Mathf.Lerp(av.walkSpeed, instSpeed, Time.deltaTime * 8f);
-                        av.isWalking = av.walkSpeed > 0.05f;
-                        av.rootObj.transform.position = camGround;
+                    // Check if this is the active local operator's avatar
+                    bool isLocal = (av.id == GetLocalOperatorId());
 
-                        Vector3 fwd = cam.transform.forward;
-                        fwd.y = 0;
-                        if (fwd.sqrMagnitude > 0.001f)
+                    // Sync local avatar to player camera seamlessly
+                    if (cam != null && isLocal)
+                    {
+                        if (currentCameraMode == PlayerCameraMode.FirstPerson)
                         {
-                            av.rootObj.transform.rotation = Quaternion.Slerp(av.rootObj.transform.rotation, Quaternion.LookRotation(fwd.normalized), Time.deltaTime * 12f);
+                            Vector3 camGround = new Vector3(cam.transform.position.x, 0f, cam.transform.position.z);
+                            av.rootObj.transform.position = camGround;
+
+                            Vector3 fwd = cam.transform.forward;
+                            fwd.y = 0;
+                            if (fwd.sqrMagnitude > 0.001f)
+                            {
+                                av.rootObj.transform.rotation = Quaternion.Slerp(av.rootObj.transform.rotation, Quaternion.LookRotation(fwd.normalized), Time.deltaTime * 16f);
+                            }
+
+                            // In VR First-Person, prevent head from clipping player eyes, while body and legs stay visible looking down
+                            if (av.headTransform != null)
+                            {
+                                av.headTransform.localScale = (av.role == DeviceRole.VRHeadset) ? Vector3.zero : Vector3.one;
+                            }
                         }
-                        av.lastPosition = camGround;
+                        else
+                        {
+                            // In 3rd-Person / Bird's Eye, head and helmet are 100% visible
+                            if (av.headTransform != null)
+                            {
+                                av.headTransform.localScale = Vector3.one;
+                            }
+                        }
                     }
 
                     // 1. Procedural Human Locomotion & Walking Stride (Legs, Knees, Arms, Bobbing)
@@ -1231,8 +1250,9 @@ namespace HoloBridge.Collaboration
                     }
                     else if (av.role == DeviceRole.VRHeadset && activeRole == DeviceRole.VRHeadset && cam != null)
                     {
-                        Ray mouseRay = cam.ScreenPointToRay(Input.mousePosition);
-                        aimTarget = Physics.Raycast(mouseRay, out RaycastHit hit, 20f) ? hit.point : turbineTarget;
+                        // In VR: Aim dynamically along headset gaze forward ray
+                        Ray vrRay = new Ray(laserOrigin, cam.transform.forward);
+                        aimTarget = Physics.Raycast(vrRay, out RaycastHit hit, 25f) ? hit.point : (laserOrigin + cam.transform.forward * 10f);
                     }
                     else
                     {
@@ -1484,14 +1504,17 @@ namespace HoloBridge.Collaboration
                 float sin = Mathf.Sin(av.walkPhase);
                 float cos = Mathf.Cos(av.walkPhase);
 
+                // Seamless zero-jitter stride blend
+                float strideBlend = Mathf.Clamp01(av.walkSpeed / 1.5f);
+
                 // 1. Natural Leg Stride (Forward / Backward leg swings)
-                float strideAngle = sin * 32f;
+                float strideAngle = sin * 32f * strideBlend;
                 if (av.leftHipPivot != null) av.leftHipPivot.localRotation = Quaternion.Euler(strideAngle, 0f, 0f);
                 if (av.rightHipPivot != null) av.rightHipPivot.localRotation = Quaternion.Euler(-strideAngle, 0f, 0f);
 
                 // 2. Realistic Knee Bends (Bends backwards on forward stride lift)
-                float leftKnee = Mathf.Max(0f, -sin) * 48f;
-                float rightKnee = Mathf.Max(0f, sin) * 48f;
+                float leftKnee = Mathf.Max(0f, -sin) * 48f * strideBlend;
+                float rightKnee = Mathf.Max(0f, sin) * 48f * strideBlend;
                 if (av.leftKneePivot != null) av.leftKneePivot.localRotation = Quaternion.Euler(leftKnee, 0f, 0f);
                 if (av.rightKneePivot != null) av.rightKneePivot.localRotation = Quaternion.Euler(rightKnee, 0f, 0f);
 
@@ -1847,6 +1870,7 @@ namespace HoloBridge.Collaboration
                     // 1. LIVE VIDEO FRAME ENDPOINT (/api/frame)
                     if (url.StartsWith("/api/frame"))
                     {
+                        lastFrameRequestTicks = System.Environment.TickCount;
                         byte[] jpg;
                         lock (streamLock)
                         {
@@ -2489,9 +2513,6 @@ namespace HoloBridge.Collaboration
     if (navigator.vibrate) navigator.vibrate(15);
     fetch('/api/move?client=' + myClientId + '&target=' + encodeURIComponent(activeTargetView) + '&x=' + x + '&z=' + z + '&yaw=' + yaw + '&y=' + y);
   }
-    if (navigator.vibrate) navigator.vibrate(15);
-    fetch('/api/move?client=' + myClientId + '&x=' + x + '&z=' + z + '&yaw=' + yaw + '&y=' + y);
-  }
 
   // PC Keyboard Walking Support in Web Browser
   window.addEventListener('keydown', function(e) {
@@ -2624,7 +2645,7 @@ namespace HoloBridge.Collaboration
             }
 
             // 1. Top-Left Collaborative Participant HUD
-            bool isLocalJoined = participants.ContainsKey("pc_local") || participants.ContainsKey("vr_local") || participants.ContainsKey("web_local");
+            isLocalJoined = participants.ContainsKey("pc_local") || participants.ContainsKey("vr_local") || participants.ContainsKey("web_local");
             GUILayout.BeginArea(new Rect(16, 55, 390, 195), GUI.skin.box);
             GUILayout.Label("<b>🌐 HOLOBRIDGE MULTI-DEVICE SPATIAL HUB</b>");
             GUILayout.Label($"<color=#7ab0d6>Camera Mode:</color> <color=#00e5ff>{currentCameraMode}</color>");

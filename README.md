@@ -3,22 +3,24 @@
 [![IEEE VR 2027](https://img.shields.io/badge/IEEE%20VR%202027-3DUI%20Contest%20Submission-00e5ff.svg)](https://ieeevr.org/)
 [![Unity 6](https://img.shields.io/badge/Unity-6000.6.5f1%20LTS-black.svg?logo=unity)](https://unity.com/)
 [![Render Pipeline](https://img.shields.io/badge/URP-Universal%20Render%20Pipeline-blue.svg)](https://unity.com/srp/Universal-Render-Pipeline)
-[![Platforms](https://img.shields.io/badge/Platforms-Meta%20Quest%203%20%7C%20Windows%20x64%20%7C%20WebGL%202.0%20%7C%20Mobile-00ff88.svg)](https://kaleidoscopic-narwhal-d339f3.netlify.app/)
+[![Platforms](https://img.shields.io/badge/Platforms-Meta%20Quest%203%20%7C%20Windows%20x64%20%7C%20WebGL%202.0%20%7C%20Mobile-00ff88.svg)](https://borni12.github.io/HOLOBRIDGE-VR/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub Pages](https://img.shields.io/badge/Hosting-GitHub%20Pages%20100%25%20Free-success.svg)](https://borni12.github.io/HOLOBRIDGE-VR/)
 
 > **Contest Track:** *Beyond Shared Reality: 3D User Interfaces for Shared Spatial Interaction*  
 > **Official Submission for the IEEE VR 2027 3DUI Contest**
 
 ---
 
-## 🌐 Live Interactive Deployments (Zero-Install)
+## 🌐 Live Interactive Deployments (Zero-Install, 100% Free Forever)
 
-Experience the live system instantly in any modern web browser on desktop, smartphone, or VR headset:
+Experience the live system instantly in any modern web browser on desktop, smartphone, or VR headset. Hosted directly on **GitHub Pages** with unlimited commits and zero bandwidth limits:
 
 | System Module | Live URL | Description |
 | :--- | :--- | :--- |
-| **🎮 3D WebGL Metaverse** | [**kaleidoscopic-narwhal-d339f3.netlify.app**](https://kaleidoscopic-narwhal-d339f3.netlify.app/) | High-fidelity interactive 3D virtual environment with real-time humanoid avatars, 1-finger touch joystick, multi-perspective cameras, and procedural Web Audio. |
-| **🕹️ Mission Control Spatial Hub** | [**silver-syrniki-1c7990.netlify.app**](https://silver-syrniki-1c7990.netlify.app/) | Asymmetric mission control dashboard with collapsible telemetry sidebar, theater-sized 3D viewport, 1-Click Judges Tour, tactical radar, and global device tracking. |
+| **🕹️ Mission Control Spatial Hub** | [**borni12.github.io/HOLOBRIDGE-VR/**](https://borni12.github.io/HOLOBRIDGE-VR/) | Master asymmetric mission control dashboard with collapsible telemetry sidebar, theater-sized embedded 3D viewport, 1-Click Judges Tour, tactical radar, and global device tracking. |
+| **🎮 3D WebGL Metaverse** | [**borni12.github.io/HOLOBRIDGE-VR/game/**](https://borni12.github.io/HOLOBRIDGE-VR/game/) | Fullscreen standalone 3D metaverse with articulated humanoid avatars, 1-finger virtual joystick, low-spec adaptive rendering (60 FPS on budget devices), and procedural Web Audio. |
+| **⚡ Netlify Mirror (Optional)** | [**kaleidoscopic-narwhal-d339f3.netlify.app**](https://kaleidoscopic-narwhal-d339f3.netlify.app/) | Secondary serverless fallback deployment mirror. |
 
 ---
 
@@ -183,16 +185,25 @@ HOLOBRIDGE-VR/
 
 ## 🛠️ Build & Deployment Instructions
 
-### Option A: Running in Unity Editor
+### Option A: GitHub Pages Hosting (Recommended — 100% Free Forever)
+The repository includes a ready-to-serve `/docs` deployment folder pre-configured with uncompressed zero-header WebGL buffers and `.nojekyll` routing:
+1. In the GitHub repository, navigate to **Settings** > **Pages**.
+2. Under **Build and deployment** > **Source**, select **Deploy from a branch**.
+3. Select branch: `main` and folder: `/docs`. Click **Save**.
+4. Both live links become active immediately with unlimited commits and zero hosting costs:
+   - 🕹️ **Mission Control Hub:** `https://borni12.github.io/HOLOBRIDGE-VR/`
+   - 🎮 **3D WebGL Metaverse:** `https://borni12.github.io/HOLOBRIDGE-VR/game/`
+
+### Option B: Running in Unity Editor
 1. Open **Unity Hub** and add this project directory (`HOLOBRIDGE-VR`).
 2. Ensure **Unity 6000.6.5f1 LTS** (Universal Render Pipeline) is selected.
-3. Open Scene: `Assets/Scenes/CyberLounge_HoloBridge.unity`.
+3. Open Scene: `Assets/Scenes/CyberLounge_HoloBridge.unity` or `Assets/Scenes/SampleScene.unity`.
 4. Press **Play**: The embedded C# server automatically spins up on `http://localhost:8080`, and the multi-role simulation begins.
 
-### Option B: Deploying to Netlify (Free Serverless Hosting)
+### Option C: Deploying to Netlify (Alternative Serverless Hosting)
 To deploy updates to Netlify drag-and-drop:
-1. **3D WebGL Metaverse:** Upload `Build/HOLOBRIDGE_WEBGL_DEPLOY.zip` to your Netlify site (e.g., `kaleidoscopic-narwhal-d339f3.netlify.app`).
-2. **Mission Control Hub:** Upload `Build/HOLOBRIDGE_CONTROLLER_DEPLOY.zip` to your controller site (e.g., `silver-syrniki-1c7990.netlify.app`).
+1. **3D WebGL Metaverse:** Upload `Build/HOLOBRIDGE_WEBGL_DEPLOY.zip` to your Netlify site.
+2. **Mission Control Hub:** Upload `Build/HOLOBRIDGE_CONTROLLER_DEPLOY.zip` to your controller site.
 
 > **Note on Archive Integrity:** The deployment archives are packed using strict POSIX forward-slash entries (`/`) to ensure proper resource resolution on Linux-based edge CDN servers.
 

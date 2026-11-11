@@ -1,0 +1,48 @@
+/*
+  Access-Control-Allow-Origin: *
+
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/Build/*.wasm
+  Content-Type: application/wasm
+  Cache-Control: public, max-age=31536000, immutable
+
+/Build/*.wasm.unityweb
+  Content-Type: application/wasm
+  Content-Encoding: gzip
+  Cache-Control: public, max-age=31536000, immutable
+
+/Build/*.data.unityweb
+  Content-Type: application/octet-stream
+  Content-Encoding: gzip
+  Cache-Control: public, max-age=31536000, immutable
+
+/Build/*.framework.js.unityweb
+  Content-Type: application/javascript
+  Content-Encoding: gzip
+  Cache-Control: public, max-age=31536000, immutable
+
+/Build/*.wasm.gz
+  Content-Type: application/wasm
+  Content-Encoding: gzip
+  Cache-Control: public, max-age=31536000, immutable
+
+/Build/*.data.gz
+  Content-Type: application/octet-stream
+  Content-Encoding: gzip
+  Cache-Control: public, max-age=31536000, immutable
+
+/Build/*.framework.js.gz
+  Content-Type: application/javascript
+  Content-Encoding: gzip
+  Cache-Control: public, max-age=31536000, immutable
+
+/StreamingAssets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/TemplateData/*
+  Cache-Control: public, max-age=31536000, immutable
