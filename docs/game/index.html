@@ -364,22 +364,15 @@
                       (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) || 
                       (navigator.deviceMemory && navigator.deviceMemory <= 4);
 
-      // Smart Hosting & Compression Detection:
-      // GitHub Pages does not send Content-Encoding: gzip headers for precompressed files,
-      // so uncompressed assets (.data, .framework.js, .wasm) are loaded for 100% zero-404 reliability.
-      // Netlify and servers with gzip headers enabled can load .unityweb when requested.
-      var urlParams = new URLSearchParams(window.location.search);
-      var compressionParam = urlParams.get("compression");
-      var isGitHubPages = window.location.hostname.includes("github.io") || window.location.protocol === "file:";
-      var useUncompressed = compressionParam === "none" || (compressionParam !== "gzip" && (isGitHubPages || !window.location.hostname.includes("netlify.app")));
-
+      // Robust Zero-Header Configuration for GitHub Pages & Static Hosts
+      // Uses direct uncompressed buffers (.data, .framework.js, .wasm) for 100% reliable execution without gzip header dependencies
       var buildUrl = "Build";
       var loaderUrl = buildUrl + "/WebGL.loader.js";
       var config = {
         arguments: [],
-        dataUrl: buildUrl + (useUncompressed ? "/WebGL.data" : "/WebGL.data.unityweb"),
-        frameworkUrl: buildUrl + (useUncompressed ? "/WebGL.framework.js" : "/WebGL.framework.js.unityweb"),
-        codeUrl: buildUrl + (useUncompressed ? "/WebGL.wasm" : "/WebGL.wasm.unityweb"),
+        dataUrl: buildUrl + "/WebGL.data",
+        frameworkUrl: buildUrl + "/WebGL.framework.js",
+        codeUrl: buildUrl + "/WebGL.wasm",
         streamingAssetsUrl: "StreamingAssets",
         companyName: "Holobridge",
         productName: "HOLOBRIDGE VR",
