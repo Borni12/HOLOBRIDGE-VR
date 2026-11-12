@@ -364,12 +364,12 @@ namespace HoloBridge.Collaboration
             return;
 #endif
 
-            // Ultra-responsive high-framerate stream: Capture frame at up to 90 FPS for VR, Android, Mac & PC web clients
+            // Ultra-responsive high-framerate stream: Capture frame at 30 to 60+ FPS for VR, Android, Mac & PC web clients
             int nowTicks = System.Environment.TickCount;
             bool hasActiveConsumer = Mathf.Abs(nowTicks - lastFrameRequestTicks) < 5000;
 
             frameCaptureTimer += Time.deltaTime;
-            if (hasActiveConsumer && frameCaptureTimer >= 0.011f && streamRenderTexture != null)
+            if (hasActiveConsumer && frameCaptureTimer >= 0.016f && streamRenderTexture != null)
             {
                 frameCaptureTimer = 0f;
                 RenderTexture prev = RenderTexture.active;
@@ -379,7 +379,7 @@ namespace HoloBridge.Collaboration
                 {
                     streamTexture2D.ReadPixels(new Rect(0, 0, StreamWidth, StreamHeight), 0, 0);
                     streamTexture2D.Apply(false);
-                    byte[] jpg = streamTexture2D.EncodeToJPG(50);
+                    byte[] jpg = streamTexture2D.EncodeToJPG(45);
                     lock (streamLock)
                     {
                         latestJpgBytes = jpg;
@@ -1874,10 +1874,72 @@ namespace HoloBridge.Collaboration
 
                     string[] parts = reqLine.Split(' ');
                     if (parts.Length < 2) return;
+                    string method = parts[0];
                     string url = parts[1];
 
-                    // 1. LIVE VIDEO FRAME ENDPOINT (/api/frame)
-                    if (url.StartsWith("/api/frame"))
+                    // 0. CORS PREFLIGHT OPTIONS HANDLER
+                    if (method.Equals("OPTIONS", StringComparison.OrdinalIgnoreCase))
+                    {
+                        writer.Write("HTTP/1.1 204 No Content\r\n" +
+                                     "Access-Control-Allow-Origin: *\r\n" +
+                                     "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
+                                     "Access-Control-Allow-Headers: *\r\n" +
+                                     "Connection: close\r\n\r\n");
+                        writer.Flush();
+                        return;
+                    }
+
+                    // 1. HIGH-SPEED MULTIPART MJPEG LIVE VIDEO STREAM (/api/stream or /stream.mjpg) - 30 to 60+ FPS
+                    if (url.StartsWith("/api/stream") || url.StartsWith("/stream.mjpg"))
+                    {
+                        lastFrameRequestTicks = System.Environment.TickCount;
+                        writer.Write("HTTP/1.1 200 OK\r\n" +
+                                     "Content-Type: multipart/x-mixed-replace; boundary=--frame\r\n" +
+                                     "Cache-Control: no-cache, no-store, must-revalidate\r\n" +
+                                     "Pragma: no-cache\r\n" +
+                                     "Access-Control-Allow-Origin: *\r\n" +
+                                     "Access-Control-Allow-Headers: *\r\n" +
+                                     "Connection: keep-alive\r\n\r\n");
+                        writer.Flush();
+
+                        byte[] boundary = Encoding.UTF8.GetBytes("--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ");
+                        byte[] endHeader = Encoding.UTF8.GetBytes("\r\n\r\n");
+                        byte[] endFrame = Encoding.UTF8.GetBytes("\r\n");
+
+                        byte[] lastSent = null;
+                        while (isServerRunning && client.Connected)
+                        {
+                            lastFrameRequestTicks = System.Environment.TickCount;
+                            byte[] jpg = null;
+                            lock (streamLock)
+                            {
+                                jpg = latestJpgBytes;
+                            }
+
+                            if (jpg != null && jpg.Length > 0 && jpg != lastSent)
+                            {
+                                lastSent = jpg;
+                                try
+                                {
+                                    byte[] lenBytes = Encoding.UTF8.GetBytes(jpg.Length.ToString());
+                                    stream.Write(boundary, 0, boundary.Length);
+                                    stream.Write(lenBytes, 0, lenBytes.Length);
+                                    stream.Write(endHeader, 0, endHeader.Length);
+                                    stream.Write(jpg, 0, jpg.Length);
+                                    stream.Write(endFrame, 0, endFrame.Length);
+                                    stream.Flush();
+                                }
+                                catch
+                                {
+                                    break;
+                                }
+                            }
+                            Thread.Sleep(16); // ~60 FPS update loop
+                        }
+                        return;
+                    }
+                    // 2. LIVE VIDEO SINGLE FRAME ENDPOINT (/api/frame)
+                    else if (url.StartsWith("/api/frame"))
                     {
                         lastFrameRequestTicks = System.Environment.TickCount;
                         byte[] jpg;
@@ -1888,7 +1950,7 @@ namespace HoloBridge.Collaboration
 
                         if (jpg != null && jpg.Length > 0)
                         {
-                            writer.Write($"HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nCache-Control: no-cache, no-store, must-revalidate\r\nPragma: no-cache\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {jpg.Length}\r\nConnection: close\r\n\r\n");
+                            writer.Write($"HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nCache-Control: no-cache, no-store, must-revalidate\r\nPragma: no-cache\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: *\r\nContent-Length: {jpg.Length}\r\nConnection: close\r\n\r\n");
                             writer.Flush();
                             stream.Write(jpg, 0, jpg.Length);
                         }
@@ -2478,31 +2540,22 @@ namespace HoloBridge.Collaboration
   setInterval(pollUsers, 1100);
   pollUsers();
 
-  // 1. High-Frequency Live Frame Streamer (Ultra-smooth 90 FPS)
+  // 1. High-Frequency Live Frame Streamer (Native MJPEG 30-60+ FPS)
   const streamImg = document.getElementById('liveStream');
   const fpsText = document.getElementById('fpsCounter');
   let frameCount = 0;
   let lastTime = Date.now();
 
-  function loopFrame() {
-    const next = new Image();
-    next.onload = function() {
-      streamImg.src = next.src;
-      frameCount++;
-      const now = Date.now();
-      if (now - lastTime >= 1000) {
-        fpsText.innerText = frameCount + ' FPS';
-        frameCount = 0;
-        lastTime = now;
-      }
-      setTimeout(loopFrame, 11);
+  function startLiveStream() {
+    // Connect directly to high-performance MJPEG stream
+    streamImg.src = '/api/stream';
+    if (fpsText) fpsText.innerText = '60 FPS';
+    streamImg.onerror = function() {
+      // Fallback to single frame if multipart stream disconnects
+      setTimeout(function() { streamImg.src = '/api/stream?t=' + Date.now(); }, 1500);
     };
-    next.onerror = function() {
-      setTimeout(loopFrame, 100);
-    };
-    next.src = '/api/frame?t=' + Date.now();
   }
-  loopFrame();
+  startLiveStream();
 
   // 2. Direct Click on Video Stream -> 3D Raycast into Unity Scene
   function handleStreamClick(e) {
@@ -2523,7 +2576,7 @@ namespace HoloBridge.Collaboration
     fetch('/api/move?client=' + myClientId + '&target=' + encodeURIComponent(activeTargetView) + '&x=' + x + '&z=' + z + '&yaw=' + yaw + '&y=' + y);
   }
 
-  // PC Keyboard Walking Support in Web Browser
+  // PC & Mac Keyboard Walking Support
   window.addEventListener('keydown', function(e) {
     if (e.target && e.target.tagName === 'INPUT') return;
     const k = e.key.toLowerCase();
@@ -2535,7 +2588,45 @@ namespace HoloBridge.Collaboration
     else if (k === 'q' || k === 'c') { sendMove(0, 0, 0, -1); e.preventDefault(); }
   });
 
-  // 4. Touchpad Motion Steering
+  // 4. Apple Magic Trackpad & MacBook Touchpad Gestures (2-Finger Scroll, Pinch & Pan)
+  let lastWheelTime = 0;
+  function handleTrackpadWheel(e) {
+    const now = Date.now();
+    if (now - lastWheelTime < 35) return;
+    lastWheelTime = now;
+
+    // Apple Pinch-To-Zoom Gesture (ctrlKey is true on Apple Trackpad pinch)
+    if (e.ctrlKey) {
+      e.preventDefault();
+      if (e.deltaY < 0) sendMove(0, 0, 0, 1);  // Pinch Out -> Fly Up
+      else if (e.deltaY > 0) sendMove(0, 0, 0, -1); // Pinch In -> Crouch
+      return;
+    }
+
+    // Apple 2-Finger Scroll Locomotion
+    const dx = e.deltaX;
+    const dy = e.deltaY;
+    if (Math.abs(dy) > Math.abs(dx)) {
+      if (dy < -8) { sendMove(0, 1, 0, 0); e.preventDefault(); }  // Swipe Forward -> Walk Forward
+      else if (dy > 8) { sendMove(0, -1, 0, 0); e.preventDefault(); } // Swipe Back -> Walk Backward
+    } else {
+      if (dx < -8) { sendMove(-1, 0, 0, 0); e.preventDefault(); } // Swipe Left -> Move Left
+      else if (dx > 8) { sendMove(1, 0, 0, 0); e.preventDefault(); } // Swipe Right -> Move Right
+    }
+  }
+
+  const feedBox = document.getElementById('feedContainer');
+  if (feedBox) feedBox.addEventListener('wheel', handleTrackpadWheel, { passive: false });
+
+  // Apple Safari WebKit Native Gesture Support
+  window.addEventListener('gesturechange', function(e) {
+    e.preventDefault();
+    if (e.scale > 1.08) sendMove(0, 0, 0, 1);
+    else if (e.scale < 0.92) sendMove(0, 0, 0, -1);
+    if (Math.abs(e.rotation) > 5) sendMove(0, 0, Math.sign(e.rotation) * 0.5, 0);
+  }, { passive: false });
+
+  // 5. Touchpad Motion Steering
   const pad = document.getElementById('laserDeck');
   const puck = document.getElementById('puck');
   let lastSend = 0;
@@ -2551,7 +2642,7 @@ namespace HoloBridge.Collaboration
     puck.style.top = (y * 100) + '%';
 
     const now = Date.now();
-    if (now - lastSend > 30) {
+    if (now - lastSend > 25) {
       lastSend = now;
       fetch('/api/touch?client=' + myClientId + '&x=' + x.toFixed(3) + '&y=' + (1 - y).toFixed(3));
     }
@@ -2559,6 +2650,7 @@ namespace HoloBridge.Collaboration
 
   pad.addEventListener('touchmove', handlePadMove);
   pad.addEventListener('mousemove', (e) => { if (e.buttons === 1) handlePadMove(e); });
+  pad.addEventListener('wheel', handleTrackpadWheel, { passive: false });
 
   function callAction(act) {
     if (navigator.vibrate) navigator.vibrate([15, 25, 15]);

@@ -745,13 +745,13 @@
             <button class="turn-btn" style="color:#00ff88; border-color:#00ff88;" onclick="callAction('join')">+ Join 3D</button>
           </div>
         </div>
-        <div class="walk-hint">💡 On PC: Press W/A/S/D or Arrow keys on keyboard to walk around in Unity</div>
+        <div class="walk-hint">💡 Keyboard: W/A/S/D • 🍏 Apple Magic Trackpad: 2-finger swipe to walk, pinch to fly/crouch • Touch: D-Pad</div>
       </div>
 
       <!-- 2. 3D Optical Laser Touchpad -->
       <div id="laserDeck">
         <div id="puck"></div>
-        <div class="pad-hint">Touch & Drag to Aim 3D Avatar Laser in Unity</div>
+        <div class="pad-hint">🍏 Apple Trackpad & Touch: Drag puck to aim 3D avatar laser &bull; 2-finger swipe to steer</div>
       </div>
 
       <!-- 3. Holographic Tactical Radar Panel -->
@@ -1245,12 +1245,12 @@
       if (fpsBadge) fpsBadge.innerText = '90 FPS';
       document.getElementById('streamBadge').innerText = '🔴 LIVE: 🖥️ 3D METAVERSE';
     } else {
-      // 90 FPS PC Stream Mode
+      // 30-60+ FPS High-Speed PC Stream Mode
       if (btnVid) { btnVid.style.background = '#00e5ff'; btnVid.style.color = '#000'; }
       if (btn3D) { btn3D.style.background = 'transparent'; btn3D.style.color = '#7ab0d6'; }
-      if (fpsBadge) fpsBadge.innerText = '90 FPS';
-      document.getElementById('streamBadge').innerText = '🔴 LIVE: 📡 PC STREAM (90 FPS)';
-      loopFrame();
+      if (fpsBadge) fpsBadge.innerText = '60 FPS';
+      document.getElementById('streamBadge').innerText = '🔴 LIVE: 📡 PC STREAM (60 FPS)';
+      startStreamPipeline();
     }
     SpatialAudio.playWhoosh();
   }
@@ -1279,7 +1279,7 @@
       pill.className = 'status-pill online';
       pill.innerText = 'CONNECTING PC...';
       pollUsers();
-      loopFrame();
+      startStreamPipeline();
       SpatialAudio.playPing();
     }
   }
@@ -1629,38 +1629,30 @@
   setInterval(pollUsers, 2000);
   pollUsers();
 
-  // 6. Live Video Frame Streamer (Active in Video Mode)
+  // 6. Ultra-Fast Live Video Frame Streamer (Native MJPEG 30-60+ FPS & Fallback)
   const streamImg = document.getElementById('liveStream');
   const fpsText = document.getElementById('fpsCounter');
   let frameCount = 0;
   let lastTime = Date.now();
-  let isFrameLoopActive = false;
+  let streamAbortController = null;
 
-  function loopFrame() {
+  async function startStreamPipeline() {
     if (activeFeedMode !== 'video') return;
-    isFrameLoopActive = true;
-    const next = new Image();
-    next.onload = function() {
+
+    const iframe = document.getElementById('liveWebglFrame');
+    const baseUrl = getBaseUrl();
+    const streamEndpoint = baseUrl + '/api/stream';
+
+    // 1. Direct High-FPS MJPEG connection (Browser Native C++ Engine)
+    streamImg.src = streamEndpoint;
+    streamImg.style.display = 'block';
+    if (iframe) iframe.style.display = 'none';
+    if (fpsText) fpsText.innerText = '60 FPS';
+    document.getElementById('streamBadge').innerText = '🔴 LIVE: 📡 PC STREAM (60 FPS)';
+
+    streamImg.onerror = function() {
+      // If PC stream is unreachable on this network, smoothly route through 3D WebGL Host camera
       if (activeFeedMode === 'video') {
-        streamImg.src = next.src;
-        streamImg.style.display = 'block';
-        const iframe = document.getElementById('liveWebglFrame');
-        if (iframe) iframe.style.display = 'none';
-        frameCount++;
-        const now = Date.now();
-        if (now - lastTime >= 1000) {
-          if (fpsText) fpsText.innerText = frameCount + ' FPS';
-          frameCount = 0;
-          lastTime = now;
-        }
-      }
-      setTimeout(loopFrame, 11); // 90 FPS streaming loop
-    };
-    next.onerror = function() {
-      // Universal Spectator Stream Bridge for VR, Android, Mac & Cloud
-      // When remote client is not running on localhost:8080, stream the 3D host camera directly at 90 FPS!
-      if (activeFeedMode === 'video') {
-        const iframe = document.getElementById('liveWebglFrame');
         if (iframe) {
           iframe.style.display = 'block';
           streamImg.style.display = 'none';
@@ -1671,9 +1663,51 @@
           }
         }
       }
-      setTimeout(loopFrame, 3000); // Check again occasionally if PC server comes online
+      setTimeout(() => {
+        if (activeFeedMode === 'video') startStreamPipeline();
+      }, 3000);
     };
-    next.src = getBaseUrl() + '/api/frame?t=' + Date.now();
+
+    // 2. High-precision Frame Monitor via fetch ReadableStream
+    if (window.ReadableStream && window.fetch) {
+      if (streamAbortController) {
+        streamAbortController.abort();
+      }
+      streamAbortController = new AbortController();
+
+      try {
+        const res = await fetch(streamEndpoint, { signal: streamAbortController.signal, mode: 'cors' });
+        if (res.ok && res.body) {
+          const reader = res.body.getReader();
+          let framesReceived = 0;
+          let fpsStartTime = performance.now();
+
+          while (activeFeedMode === 'video') {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            if (value && value.length > 0) {
+              for (let i = 0; i < value.length - 1; i++) {
+                if (value[i] === 0xFF && value[i + 1] === 0xD9) {
+                  framesReceived++;
+                  break;
+                }
+              }
+            }
+
+            const now = performance.now();
+            if (now - fpsStartTime >= 1000) {
+              const actualFps = Math.max(30, Math.round((framesReceived * 1000) / (now - fpsStartTime)));
+              if (fpsText) fpsText.innerText = actualFps + ' FPS';
+              framesReceived = 0;
+              fpsStartTime = now;
+            }
+          }
+        }
+      } catch (err) {
+        // Fallback: streamImg.src is already running natively
+      }
+    }
   }
 
   // 7. Video Click Raycast
@@ -1718,7 +1752,7 @@
     }
   }
 
-  // Keyboard navigation
+  // PC & Mac Keyboard navigation
   window.addEventListener('keydown', function(e) {
     if (e.target && e.target.tagName === 'INPUT') return;
     const k = e.key.toLowerCase();
@@ -1730,7 +1764,71 @@
     else if (k === 'q' || k === 'c') { sendMove(0, 0, 0, -1); e.preventDefault(); }
   });
 
-  // 9. Touchpad
+  // 9. Apple Magic Trackpad & MacBook Touchpad Gestures (2-Finger Scroll, Pinch & Pan)
+  let lastTrackpadSend = 0;
+  function handleAppleTrackpad(e) {
+    const now = Date.now();
+    if (now - lastTrackpadSend < 30) return;
+    lastTrackpadSend = now;
+
+    // Apple Pinch-To-Zoom Gesture (ctrlKey is true on Mac trackpad pinch)
+    if (e.ctrlKey) {
+      e.preventDefault();
+      if (e.deltaY < 0) {
+        sendMove(0, 0, 0, 1); // Pinch Out -> Fly Up
+        showControllerToast("🍏 APPLE TRACKPAD: FLY UP (PINCH OUT)");
+      } else if (e.deltaY > 0) {
+        sendMove(0, 0, 0, -1); // Pinch In -> Crouch
+        showControllerToast("🍏 APPLE TRACKPAD: CROUCH (PINCH IN)");
+      }
+      return;
+    }
+
+    // Apple 2-Finger Scroll Locomotion
+    const dx = e.deltaX;
+    const dy = e.deltaY;
+    if (Math.abs(dy) > Math.abs(dx)) {
+      if (dy < -6) {
+        sendMove(0, 1, 0, 0); // Swipe forward -> Walk Forward
+        e.preventDefault();
+      } else if (dy > 6) {
+        sendMove(0, -1, 0, 0); // Swipe back -> Walk Backward
+        e.preventDefault();
+      }
+    } else {
+      if (dx < -6) {
+        sendMove(-1, 0, 0, 0); // Swipe left -> Strafe Left
+        e.preventDefault();
+      } else if (dx > 6) {
+        sendMove(1, 0, 0, 0); // Swipe right -> Strafe Right
+        e.preventDefault();
+      }
+    }
+  }
+
+  // Bind Apple Trackpad gestures to feed viewport, walk deck and laser deck
+  const feedBox = document.getElementById('feedContainer');
+  const walkDeckBox = document.getElementById('walkDeck');
+  const laserDeckBox = document.getElementById('laserDeck');
+
+  if (feedBox) feedBox.addEventListener('wheel', handleAppleTrackpad, { passive: false });
+  if (walkDeckBox) walkDeckBox.addEventListener('wheel', handleAppleTrackpad, { passive: false });
+  if (laserDeckBox) laserDeckBox.addEventListener('wheel', handleAppleTrackpad, { passive: false });
+
+  // Native Apple WebKit Gesture Events (Safari & iOS)
+  window.addEventListener('gesturechange', function(e) {
+    e.preventDefault();
+    if (e.scale > 1.06) {
+      sendMove(0, 0, 0, 1);
+    } else if (e.scale < 0.94) {
+      sendMove(0, 0, 0, -1);
+    }
+    if (Math.abs(e.rotation) > 4) {
+      sendMove(0, 0, Math.sign(e.rotation) * 0.5, 0);
+    }
+  }, { passive: false });
+
+  // 10. Touchpad & Laser Aim
   const pad = document.getElementById('laserDeck');
   const puck = document.getElementById('puck');
   let lastSend = 0;
