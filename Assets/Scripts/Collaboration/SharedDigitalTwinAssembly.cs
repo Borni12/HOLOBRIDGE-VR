@@ -89,6 +89,28 @@ namespace HoloBridge.Collaboration
             IsXRayMode = !isXRayMode;
         }
 
+        public enum ModelPreset
+        {
+            SpaceXRaptor3 = 0,
+            NASAIonThruster = 1,
+            CryoTurbopump = 2
+        }
+
+        [Header("Model Presets")]
+        [SerializeField] private ModelPreset currentModelPreset = ModelPreset.SpaceXRaptor3;
+        public ModelPreset CurrentModelPreset => currentModelPreset;
+
+        public void SetModelPreset(int presetIndex)
+        {
+            currentModelPreset = (ModelPreset)Mathf.Clamp(presetIndex, 0, 2);
+            hasCableCollision = true;
+            isProposalActive = false;
+            isProposalCommitted = false;
+            BuildProceduralTurbine();
+            OmniOSManager.Instance?.ShowNotificationToast($"🚀 ACTIVE CAD MODEL: {currentModelPreset}");
+            SpatialAudioEngine.Instance?.PlayNotificationChime();
+        }
+
         [Header("Aerospace Wire-Harness & Consensus State")]
         [SerializeField] private bool hasCableCollision = true;
         [SerializeField] private bool isProposalActive = false;
@@ -193,9 +215,13 @@ namespace HoloBridge.Collaboration
 
         private void BuildProceduralTurbine()
         {
+            if (assemblyRoot != null)
+            {
+                Destroy(assemblyRoot.gameObject);
+            }
             parts.Clear();
 
-            assemblyRoot = new GameObject("DigitalTwin_TurbineRoot").transform;
+            assemblyRoot = new GameObject($"DigitalTwin_{currentModelPreset}").transform;
             assemblyRoot.SetParent(transform, false);
             assemblyRoot.localPosition = Vector3.zero;
             assemblyRoot.localRotation = Quaternion.identity;

@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>HoloBridge Spatial Hub • Multi-Operator Mission Control</title>
+<script src="three.min.js"></script>
+<script src="OrbitControls.js"></script>
+<script src="GLTFLoader.js"></script>
+<script src="OBJLoader.js"></script>
 <script src="mqtt.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -523,6 +527,74 @@
     color: #4e7899;
     margin-top: 6px;
   }
+  /* 3D CAD Studio & Room System Styles */
+  .cad-preset-btn, .cad-room-btn {
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid #1e3a5f;
+    color: #94a3b8;
+    padding: 6px 11px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .cad-preset-btn:hover, .cad-room-btn:hover {
+    border-color: #00f0ff;
+    color: #fff;
+    transform: translateY(-1px);
+  }
+  .cad-preset-btn.active {
+    background: linear-gradient(135deg, rgba(0,240,255,0.25) 0%, rgba(0,255,136,0.15) 100%);
+    border-color: #00f0ff;
+    color: #00f0ff;
+    box-shadow: 0 0 10px rgba(0,240,255,0.3);
+  }
+  .cad-room-btn.active {
+    background: linear-gradient(135deg, rgba(168,85,247,0.25) 0%, rgba(0,229,255,0.15) 100%);
+    border-color: #c084fc;
+    color: #e9d5ff;
+    box-shadow: 0 0 10px rgba(168,85,247,0.3);
+  }
+  .tool-btn {
+    background: rgba(11, 18, 30, 0.88);
+    border: 1px solid #1e3a5f;
+    color: #cbd5e1;
+    font-size: 9px;
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .tool-btn:hover {
+    background: #1e3a5f;
+    color: #00f0ff;
+    border-color: #00f0ff;
+  }
+  .tool-btn.active {
+    background: #00f0ff;
+    color: #040912;
+    border-color: #00f0ff;
+  }
+  .cad-part-card {
+    background: rgba(15, 23, 42, 0.85);
+    padding: 6px 10px;
+    border-radius: 5px;
+    border-left: 3px solid #00f0ff;
+    color: #cbd5e1;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+  }
+  .cad-part-card:hover {
+    background: rgba(30, 41, 59, 0.95);
+    border-color: #00ff88;
+    transform: translateX(2px);
+  }
 </style>
 </head>
 <body>
@@ -732,38 +804,96 @@
         </div>
       </div>
 
-      <!-- Web-Blender / Universal CAD File Loader & Outliner -->
-      <div id="cadWorkspaceDeck" style="background:rgba(8,14,24,0.92); border:1px solid #1e293b; border-radius:8px; padding:10px 14px; margin-bottom:10px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <div style="display:flex; align-items:center; gap:6px;">
-            <span style="font-size:11px; font-weight:800; color:#00f0ff; letter-spacing:0.8px;">🛠️ WEB-BLENDER / CAD INSPECTOR</span>
-            <span style="font-size:8px; background:rgba(0,240,255,0.15); color:#00f0ff; padding:2px 6px; border-radius:3px; font-family:monospace;">AERO-CAD V2.4</span>
+      <!-- Aerospace 3D CAD Studio & Virtual Room System -->
+      <div id="cadWorkspaceDeck" style="background:rgba(8,14,24,0.95); border:1px solid #1e3a5f; border-radius:10px; padding:12px 14px; margin-bottom:12px; box-shadow:0 6px 25px rgba(0,0,0,0.6);">
+        <!-- Studio Header -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:6px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:12px; font-weight:900; color:#00f0ff; letter-spacing:0.8px;">🚀 AEROSPACE 3D CAD STUDIO & ROOM ENVIRONMENT</span>
+            <span style="font-size:9px; background:rgba(0,255,136,0.18); color:#00ff88; border:1px solid #00ff88; padding:2px 7px; border-radius:4px; font-weight:bold;">PRE-LOADED & READY</span>
           </div>
-          <label for="cadFileInput" style="background:#1e3a5f; color:#00f0ff; font-size:9px; font-weight:bold; padding:4px 9px; border-radius:4px; cursor:pointer; border:1px solid #00f0ff;">
-            📂 Load Any 3D CAD (.glb/.obj)
-          </label>
-          <input type="file" id="cadFileInput" accept=".glb,.gltf,.obj,.stl" style="display:none;" onchange="handleCadFileUpload(event)" />
-        </div>
-        
-        <!-- Drag & Drop Zone / Status -->
-        <div id="cadDropZone" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleFileDrop(event)" style="border:1px dashed #334155; border-radius:6px; padding:8px; text-align:center; font-size:10px; color:#94a3b8; background:rgba(15,23,42,0.6); margin-bottom:8px; transition:all 0.2s ease;">
-          <span id="cadFileName">🚀 Active Model: SpaceX/NASA Ion Thruster • Drag & Drop any custom 3D CAD file here</span>
+          <span style="font-size:9px; color:#64748b; font-family:monospace;">WebGL 2.0 • 60 FPS • SE(3) KINEMATICS</span>
         </div>
 
-        <!-- Model Hierarchy Outliner -->
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:9px; font-family:monospace;">
-          <div style="background:rgba(15,23,42,0.8); padding:5px 8px; border-radius:4px; border-left:3px solid #00f0ff; color:#cbd5e1;">
-            ⛊ Shroud: Titanium Shell [±0.50mm]
+        <!-- Row 1: 1-Click Pre-Loaded CAD Model Presets -->
+        <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap; align-items:center;">
+          <span style="font-size:10px; font-weight:bold; color:#cbd5e1; margin-right:4px;">📦 CAD Model:</span>
+          <button id="btnModelRaptor" class="cad-preset-btn active" onclick="switchCadModel('raptor')">
+            🚀 SpaceX Raptor 3 Engine (Wire Clash)
+          </button>
+          <button id="btnModelIon" class="cad-preset-btn" onclick="switchCadModel('ion')">
+            ⚡ NASA Ion Thruster Core
+          </button>
+          <button id="btnModelPump" class="cad-preset-btn" onclick="switchCadModel('turbopump')">
+            ⚙️ Cryo Turbopump Impeller
+          </button>
+        </div>
+
+        <!-- Row 2: 1-Click Room & Environment Presets -->
+        <div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; align-items:center;">
+          <span style="font-size:10px; font-weight:bold; color:#cbd5e1; margin-right:4px;">🏛️ Room Setting:</span>
+          <button id="btnRoomHangar" class="cad-room-btn active" onclick="switchRoomTheme('hangar')">
+            🌌 Room 1: CyberHangar (Dark Obsidian Deck)
+          </button>
+          <button id="btnRoomCleanroom" class="cad-room-btn" onclick="switchRoomTheme('cleanroom')">
+            ⚪ Room 2: NASA Cleanroom (Ultra-White Diffuse Lab)
+          </button>
+          <button id="btnRoomMars" class="cad-room-btn" onclick="switchRoomTheme('mars')">
+            🪐 Room 3: Mars Outpost Bay (Solar Horizon)
+          </button>
+        </div>
+
+        <!-- 3D Interactive WebGL Canvas Viewport -->
+        <div id="cad3DContainer" style="position:relative; width:100%; height:380px; border-radius:8px; overflow:hidden; border:1.5px solid #1e3a5f; background:#040711; margin-bottom:10px; box-shadow:inset 0 0 40px rgba(0,0,0,0.9);">
+          <canvas id="cad3DCanvas" style="width:100%; height:100%; display:block; cursor:grab;"></canvas>
+
+          <!-- Floating Status Overlay (Top Left) -->
+          <div style="position:absolute; top:8px; left:8px; z-index:10; display:flex; gap:6px; flex-wrap:wrap; pointer-events:none;">
+            <span id="cadActiveBadge" style="background:rgba(4,9,18,0.88); border:1px solid #00f0ff; color:#00f0ff; font-size:10px; font-weight:bold; padding:3px 8px; border-radius:4px; box-shadow:0 0 10px rgba(0,240,255,0.25);">
+              🚀 SpaceX Raptor 3 • Wire 04 Clash Active
+            </span>
+            <span id="cadRoomBadge" style="background:rgba(4,9,18,0.88); border:1px solid #c084fc; color:#e9d5ff; font-size:10px; font-weight:bold; padding:3px 8px; border-radius:4px;">
+              🌌 CyberHangar
+            </span>
           </div>
-          <div id="outlinerWire" style="background:rgba(15,23,42,0.8); padding:5px 8px; border-radius:4px; border-left:3px solid #e5a93b; color:#e5a93b;">
-            ⚡ Wire 04: Chafing Clash [⚠️ RE-ROUTE]
+
+          <!-- Floating Inspection Tools (Top Right) -->
+          <div style="position:absolute; top:8px; right:8px; z-index:10; display:flex; gap:4px; flex-wrap:wrap;">
+            <button id="btnToolExplode" class="tool-btn" onclick="toggleCadExplode()" title="Explode Assembly View">💥 Explode</button>
+            <button id="btnToolXRay" class="tool-btn" onclick="toggleCadXRay()" title="X-Ray Transparent Glass">👁️ X-Ray</button>
+            <button id="btnToolRotate" class="tool-btn active" onclick="toggleCadRotation()" title="Auto-Rotate 360">🔄 Auto-Rotate</button>
+            <button class="tool-btn" onclick="resetCadCamera()" title="Reset Camera Vantage">🎯 Reset Cam</button>
           </div>
-          <div style="background:rgba(15,23,42,0.8); padding:5px 8px; border-radius:4px; border-left:3px solid #38bdf8; color:#cbd5e1;">
-            ⚙ Impeller: Turbo-Pump [15 RPM]
+
+          <!-- Bottom Navigation Hint & Clearance Live Readout -->
+          <div style="position:absolute; bottom:6px; left:8px; right:8px; z-index:10; display:flex; justify-content:space-between; align-items:center; font-size:9px; color:#64748b; pointer-events:none; flex-wrap:wrap; gap:4px;">
+            <span>🖱️ Left-drag: Orbit &bull; Right-drag: Pan &bull; Scroll/Pinch: Zoom &bull; Touch: 1-finger rotate</span>
+            <span id="cadClearanceText" style="color:#e5a93b; font-weight:bold; background:rgba(6,11,20,0.85); padding:2px 6px; border-radius:4px; border:1px solid rgba(229,169,59,0.4);">
+              ⚠️ Wire Clash Clearance: 0.00 mm (Re-Route Required)
+            </span>
           </div>
-          <div style="background:rgba(15,23,42,0.8); padding:5px 8px; border-radius:4px; border-left:3px solid #a855f7; color:#cbd5e1;">
-            🎯 Injector: Fuel Nozzle [±0.05mm]
+        </div>
+
+        <!-- Assembly Outliner Tree with Click-to-Focus -->
+        <div style="margin-bottom:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:10px; font-weight:bold; color:#cbd5e1;">📋 ASSEMBLY OUTLINER (Click any part to isolate & zoom in 3D):</span>
+            <span style="font-size:9px; color:#00f0ff; font-family:monospace;" id="outlinerSubsystemCount">5 SUBSYSTEMS DETECTED</span>
           </div>
+          <div id="cadOutlinerGrid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:6px; font-size:9px; font-family:monospace;">
+            <!-- Rendered dynamically by JavaScript -->
+          </div>
+        </div>
+
+        <!-- Optional Custom File Upload Area (Clearly secondary to pre-loaded models) -->
+        <div style="border-top:1px solid #1e293b; padding-top:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <span style="font-size:10px; color:#64748b;">
+            💡 Have your own model? Drag & drop any <code>.glb</code> / <code>.obj</code> file into the 3D viewport, or:
+          </span>
+          <label for="cadFileInput" style="background:#0f172a; color:#38bdf8; font-size:9px; font-weight:bold; padding:4px 10px; border-radius:4px; cursor:pointer; border:1px solid #1e3a5f; transition:all 0.2s ease;">
+            📂 Load Custom CAD (.glb/.obj)
+          </label>
+          <input type="file" id="cadFileInput" accept=".glb,.gltf,.obj,.stl" style="display:none;" onchange="handleCadFileUpload(event)" />
         </div>
       </div>
 
@@ -1957,13 +2087,646 @@
     showControllerToast("ACTION TRIGGERED: " + act.toUpperCase());
   }
 
-  // 11. Aerospace Wire-Harness Consensus Protocol (AGREE / DISAGREE)
+  // =========================================================================
+  // 11. AEROSPACE 3D CAD STUDIO & VIRTUAL ROOM ENGINE (Three.js WebGL)
+  // =========================================================================
+  let cadScene, cadCamera, cadRenderer, cadControls;
+  let cadRoomGroup, cadModelGroup, cadPedestalGroup;
+  let activeCadModelKey = 'raptor';
+  let activeCadRoomKey = 'hangar';
+  let isCadExploded = false;
+  let isCadXRay = false;
+  let isCadAutoRotate = true;
+  let isCadWireCommitted = false;
+  let rotatingImpellerObj = null;
+  let clashingWireObj = null;
+  let ghostWireObj = null;
+  let outerCasingObj = null;
+  let animatedPartsList = [];
+  let cadAmbientLight, cadDirLight, cadSecondaryLight;
+
+  // Model Metadata & Subsystems
+  const CAD_PRESETS = {
+    raptor: {
+      name: "SpaceX Raptor 3 Engine",
+      subsystems: [
+        { id: "shroud", name: "⛊ Shroud: Titanium Shell", spec: "±0.50mm", color: "#00f0ff" },
+        { id: "wire", name: "⚡ Wire 04: Chafing Clash [⚠️ RE-ROUTE]", spec: "0.00mm", color: "#e5a93b" },
+        { id: "impeller", name: "⚙ Impeller: Turbo-Pump (15 RPM)", spec: "15 RPM", color: "#38bdf8" },
+        { id: "injector", name: "🎯 Injector: Fuel Nozzle Manifold", spec: "±0.05mm", color: "#a855f7" },
+        { id: "bearing", name: "🔩 Bearing: Needle Roller Core", spec: "±0.005mm", color: "#00ff88" }
+      ]
+    },
+    ion: {
+      name: "NASA Deep Space Ion Thruster",
+      subsystems: [
+        { id: "anode", name: "⛊ Anode Grid: Titanium Mesh", spec: "±0.10mm", color: "#00f0ff" },
+        { id: "wire", name: "⚡ Cathode Bus: Grid Short [⚠️ CLASH]", spec: "0.00mm", color: "#ef4444" },
+        { id: "solenoid", name: "🌀 Solenoid: Magnetic Confinement", spec: "1.2 Tesla", color: "#38bdf8" },
+        { id: "xenon", name: "🧪 Core: Xenon Discharge Chamber", spec: "2.4 Bar", color: "#a855f7" },
+        { id: "plasma", name: "✨ Plasma Beam: 4500s ISP", spec: "35 km/s", color: "#00ff88" }
+      ]
+    },
+    turbopump: {
+      name: "Cryogenic Turbopump Impeller",
+      subsystems: [
+        { id: "volute", name: "⛊ Volute Casing: Inconel 718", spec: "±0.25mm", color: "#00f0ff" },
+        { id: "impeller", name: "⚙ Impeller & Inducer Blades", spec: "35,000 RPM", color: "#38bdf8" },
+        { id: "bearing", name: "⚡ Bearing 04: Needle Roller [⚠️ CLASH]", spec: "±0.005mm", color: "#e5a93b" },
+        { id: "shaft", name: "🔩 Drive Shaft: Stainless 316", spec: "±0.01mm", color: "#a855f7" },
+        { id: "flange", name: "🎯 Discharge Flange: LOX 300 Bar", spec: "±0.05mm", color: "#00ff88" }
+      ]
+    }
+  };
+
+  function initCadStudio3D() {
+    const container = document.getElementById('cad3DContainer');
+    const canvas = document.getElementById('cad3DCanvas');
+    if (!container || !canvas || typeof THREE === 'undefined') return;
+
+    // 1. Scene & Camera
+    cadScene = new THREE.Scene();
+    cadCamera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+    cadCamera.position.set(2.4, 1.8, 2.7);
+
+    // 2. Renderer
+    cadRenderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+    cadRenderer.setSize(container.clientWidth, container.clientHeight);
+    cadRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    cadRenderer.shadowMap.enabled = true;
+
+    // 3. Orbit Controls
+    if (typeof THREE.OrbitControls !== 'undefined') {
+      cadControls = new THREE.OrbitControls(cadCamera, canvas);
+      cadControls.enableDamping = true;
+      cadControls.dampingFactor = 0.08;
+      cadControls.maxPolarAngle = Math.PI / 2 + 0.05;
+      cadControls.minDistance = 1.2;
+      cadControls.maxDistance = 8.0;
+      cadControls.target.set(0, 0.45, 0);
+    }
+
+    // 4. Lighting Rig
+    cadAmbientLight = new THREE.AmbientLight(0x101b2b, 1.6);
+    cadScene.add(cadAmbientLight);
+
+    cadDirLight = new THREE.DirectionalLight(0x00f0ff, 1.4);
+    cadDirLight.position.set(4, 6, 3);
+    cadScene.add(cadDirLight);
+
+    cadSecondaryLight = new THREE.DirectionalLight(0xffaa44, 0.8);
+    cadSecondaryLight.position.set(-4, 3, -3);
+    cadScene.add(cadSecondaryLight);
+
+    // 5. Container Groups
+    cadRoomGroup = new THREE.Group();
+    cadScene.add(cadRoomGroup);
+
+    cadPedestalGroup = new THREE.Group();
+    cadScene.add(cadPedestalGroup);
+
+    cadModelGroup = new THREE.Group();
+    cadScene.add(cadModelGroup);
+
+    // 6. Build Initial Room & Model
+    buildCadRoom(activeCadRoomKey);
+    buildCadModel(activeCadModelKey);
+
+    // 7. Window Resize
+    window.addEventListener('resize', onCadWindowResize);
+
+    // 8. Render Loop
+    requestAnimationFrame(animateCadStudio);
+  }
+
+  function onCadWindowResize() {
+    const container = document.getElementById('cad3DContainer');
+    if (!container || !cadCamera || !cadRenderer) return;
+    cadCamera.aspect = container.clientWidth / container.clientHeight;
+    cadCamera.updateProjectionMatrix();
+    cadRenderer.setSize(container.clientWidth, container.clientHeight);
+  }
+
+  function buildCadRoom(roomKey) {
+    if (!cadRoomGroup) return;
+    while (cadRoomGroup.children.length > 0) {
+      cadRoomGroup.remove(cadRoomGroup.children[0]);
+    }
+    while (cadPedestalGroup.children.length > 0) {
+      cadPedestalGroup.remove(cadPedestalGroup.children[0]);
+    }
+
+    let bgColor, floorColor, gridColor1, gridColor2, lightColor, ambientIntensity;
+
+    if (roomKey === 'cleanroom') {
+      bgColor = 0xf1f5f9;
+      floorColor = 0xffffff;
+      gridColor1 = 0x94a3b8;
+      gridColor2 = 0xe2e8f0;
+      lightColor = 0xffffff;
+      ambientIntensity = 2.4;
+      cadAmbientLight.color.setHex(0xffffff);
+      cadAmbientLight.intensity = ambientIntensity;
+      cadDirLight.color.setHex(0xffffff);
+      cadDirLight.intensity = 1.8;
+      cadSecondaryLight.color.setHex(0xdbeafe);
+    } else if (roomKey === 'mars') {
+      bgColor = 0x180b08;
+      floorColor = 0x3b140d;
+      gridColor1 = 0xf97316;
+      gridColor2 = 0x7c2d12;
+      lightColor = 0xf97316;
+      ambientIntensity = 1.4;
+      cadAmbientLight.color.setHex(0x38120b);
+      cadAmbientLight.intensity = ambientIntensity;
+      cadDirLight.color.setHex(0xf97316);
+      cadDirLight.intensity = 2.0;
+      cadSecondaryLight.color.setHex(0xfbbf24);
+    } else { // hangar (default)
+      bgColor = 0x050914;
+      floorColor = 0x0b1324;
+      gridColor1 = 0x00f0ff;
+      gridColor2 = 0x1e3a5f;
+      lightColor = 0x00f0ff;
+      ambientIntensity = 1.6;
+      cadAmbientLight.color.setHex(0x101b2b);
+      cadAmbientLight.intensity = ambientIntensity;
+      cadDirLight.color.setHex(0x00f0ff);
+      cadDirLight.intensity = 1.4;
+      cadSecondaryLight.color.setHex(0xffaa00);
+    }
+
+    if (cadRenderer) cadRenderer.setClearColor(bgColor, 1);
+
+    // Floor Platform
+    const floorGeo = new THREE.CylinderGeometry(4.2, 4.4, 0.08, 48);
+    const floorMat = new THREE.MeshStandardMaterial({ color: floorColor, roughness: 0.35, metalness: 0.65 });
+    const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+    floorMesh.position.y = -0.04;
+    cadRoomGroup.add(floorMesh);
+
+    // Grid Helper
+    const grid = new THREE.GridHelper(8, 20, gridColor1, gridColor2);
+    grid.position.y = 0.005;
+    cadRoomGroup.add(grid);
+
+    // High-Tech Illuminated Pedestal
+    const pedGeo = new THREE.CylinderGeometry(1.25, 1.35, 0.18, 36);
+    const pedMat = new THREE.MeshStandardMaterial({ color: 0x111c30, metalness: 0.9, roughness: 0.2 });
+    const pedMesh = new THREE.Mesh(pedGeo, pedMat);
+    pedMesh.position.y = 0.09;
+    cadPedestalGroup.add(pedMesh);
+
+    // Glowing Neon Ring around Pedestal
+    const ringGeo = new THREE.TorusGeometry(1.28, 0.022, 16, 64);
+    const ringMat = new THREE.MeshStandardMaterial({ color: lightColor, emissive: lightColor, emissiveIntensity: 1.2 });
+    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+    ringMesh.rotation.x = Math.PI / 2;
+    ringMesh.position.y = 0.18;
+    cadPedestalGroup.add(ringMesh);
+
+    // Perimeter Accent Columns
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2;
+      const colGeo = new THREE.BoxGeometry(0.12, 3.2, 0.12);
+      const colMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8 });
+      const colMesh = new THREE.Mesh(colGeo, colMat);
+      colMesh.position.set(Math.sin(angle) * 3.8, 1.6, Math.cos(angle) * 3.8);
+      cadRoomGroup.add(colMesh);
+
+      const stripGeo = new THREE.BoxGeometry(0.04, 3.0, 0.04);
+      const stripMat = new THREE.MeshStandardMaterial({ color: lightColor, emissive: lightColor, emissiveIntensity: 0.85 });
+      const stripMesh = new THREE.Mesh(stripGeo, stripMat);
+      stripMesh.position.set(Math.sin(angle) * 3.74, 1.6, Math.cos(angle) * 3.74);
+      cadRoomGroup.add(stripMesh);
+    }
+  }
+
+  function buildCadModel(modelKey) {
+    if (!cadModelGroup) return;
+    while (cadModelGroup.children.length > 0) {
+      cadModelGroup.remove(cadModelGroup.children[0]);
+    }
+    animatedPartsList = [];
+    rotatingImpellerObj = null;
+    clashingWireObj = null;
+    ghostWireObj = null;
+    outerCasingObj = null;
+
+    if (modelKey === 'ion') {
+      buildIonThrusterModel();
+    } else if (modelKey === 'turbopump') {
+      buildTurbopumpModel();
+    } else {
+      buildRaptorRocketModel();
+    }
+
+    updateOutlinerUI(modelKey);
+  }
+
+  // Model 1: SpaceX Raptor 3 Rocket Engine Digital Twin
+  function buildRaptorRocketModel() {
+    const root = new THREE.Group();
+    root.position.y = 0.65;
+
+    // 1. Titanium Outer Shroud (Cutaway section to reveal internal high-pressure core)
+    const shroudGeo = new THREE.CylinderGeometry(0.68, 0.82, 1.15, 36, 1, true, 0, Math.PI * 1.65);
+    const shroudMat = new THREE.MeshStandardMaterial({
+      color: 0x243248,
+      metalness: 0.88,
+      roughness: 0.22,
+      side: THREE.DoubleSide
+    });
+    outerCasingObj = new THREE.Mesh(shroudGeo, shroudMat);
+    outerCasingObj.userData = { id: 'shroud', explodeVec: new THREE.Vector3(0, 0.45, 0) };
+    root.add(outerCasingObj);
+    animatedPartsList.push(outerCasingObj);
+
+    // 2. High-Pressure Turbopump Impeller
+    const impellerGroup = new THREE.Group();
+    impellerGroup.position.set(0, 0.35, 0);
+    impellerGroup.userData = { id: 'impeller', explodeVec: new THREE.Vector3(0, 0.30, 0.25) };
+
+    const hubGeo = new THREE.CylinderGeometry(0.18, 0.22, 0.12, 24);
+    const hubMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.15 });
+    const hubMesh = new THREE.Mesh(hubGeo, hubMat);
+    impellerGroup.add(hubMesh);
+
+    for (let b = 0; b < 12; b++) {
+      const bAngle = (b / 12) * Math.PI * 2;
+      const bladeGeo = new THREE.BoxGeometry(0.025, 0.08, 0.24);
+      const bladeMesh = new THREE.Mesh(bladeGeo, hubMat);
+      bladeMesh.position.set(Math.sin(bAngle) * 0.19, 0, Math.cos(bAngle) * 0.19);
+      bladeMesh.rotation.set(0.35, bAngle, 0);
+      impellerGroup.add(bladeMesh);
+    }
+    root.add(impellerGroup);
+    rotatingImpellerObj = impellerGroup;
+    animatedPartsList.push(impellerGroup);
+
+    // 3. Central Combustion Chamber Core
+    const chamberGeo = new THREE.CylinderGeometry(0.48, 0.52, 0.65, 32);
+    const chamberMat = new THREE.MeshStandardMaterial({ color: 0x1a2333, metalness: 0.9, roughness: 0.3 });
+    const chamberMesh = new THREE.Mesh(chamberGeo, chamberMat);
+    chamberMesh.position.y = 0;
+    chamberMesh.userData = { id: 'chamber', explodeVec: new THREE.Vector3(0, -0.15, 0) };
+    root.add(chamberMesh);
+    animatedPartsList.push(chamberMesh);
+
+    // 4. Regeneratively Cooled Bell Nozzle with Cyan Fuel Glow
+    const nozzleGeo = new THREE.CylinderGeometry(0.35, 0.78, 0.82, 36, 1, true);
+    const nozzleMat = new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.92, roughness: 0.25, side: THREE.DoubleSide });
+    const nozzleMesh = new THREE.Mesh(nozzleGeo, nozzleMat);
+    nozzleMesh.position.y = -0.68;
+    nozzleMesh.userData = { id: 'injector', explodeVec: new THREE.Vector3(0, -0.55, 0) };
+    root.add(nozzleMesh);
+    animatedPartsList.push(nozzleMesh);
+
+    // Injector glow ring inside nozzle
+    const nozRingGeo = new THREE.TorusGeometry(0.42, 0.03, 16, 36);
+    const nozRingMat = new THREE.MeshStandardMaterial({ color: 0x00f0ff, emissive: 0x00d4ff, emissiveIntensity: 1.6 });
+    const nozRing = new THREE.Mesh(nozRingGeo, nozRingMat);
+    nozRing.rotation.x = Math.PI / 2;
+    nozRing.position.y = -0.42;
+    nozzleMesh.add(nozRing);
+
+    // 5. Cryogenic Actuator Manifold (Point of clash!)
+    const actGeo = new THREE.BoxGeometry(0.18, 0.28, 0.16);
+    const actMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.85, roughness: 0.3 });
+    const actMesh = new THREE.Mesh(actGeo, actMat);
+    actMesh.position.set(0.42, 0.05, 0);
+    root.add(actMesh);
+
+    // 6. Ignition Wiring Harness Bus 04 (4 Cable Conduits)
+    const harnessGroup = new THREE.Group();
+    harnessGroup.userData = { id: 'wire', explodeVec: new THREE.Vector3(0.28, 0, 0) };
+
+    for (let c = 0; c < 3; c++) {
+      const cAngle = (c * 0.35) - 0.7;
+      const cGeo = new THREE.CylinderGeometry(0.016, 0.016, 0.92, 12);
+      const cMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.8 });
+      const cMesh = new THREE.Mesh(cGeo, cMat);
+      cMesh.position.set(Math.sin(cAngle) * 0.52, 0, Math.cos(cAngle) * 0.52);
+      harnessGroup.add(cMesh);
+    }
+
+    // Cable 4: CLASHING HAZARD CABLE (Amber/Red in contact with Actuator)
+    const clashGeo = new THREE.CylinderGeometry(0.024, 0.024, 0.94, 16);
+    const clashMat = new THREE.MeshStandardMaterial({
+      color: 0xef4444,
+      emissive: 0xf59e0b,
+      emissiveIntensity: 1.4,
+      roughness: 0.25
+    });
+    clashingWireObj = new THREE.Mesh(clashGeo, clashMat);
+    // Baseline clashing position: exactly touching actuator at x: 0.43
+    clashingWireObj.position.set(0.43, 0.02, 0.02);
+    harnessGroup.add(clashingWireObj);
+
+    // Ghost Wire: Safe Re-Route Path (+3.20mm radial clearance in glowing translucent Cyan)
+    const ghostGeo = new THREE.CylinderGeometry(0.022, 0.022, 0.96, 16);
+    const ghostMat = new THREE.MeshStandardMaterial({
+      color: 0x00f0ff,
+      emissive: 0x00ff88,
+      emissiveIntensity: 0.7,
+      transparent: true,
+      opacity: 0.5
+    });
+    ghostWireObj = new THREE.Mesh(ghostGeo, ghostMat);
+    ghostWireObj.position.set(0.53, 0.02, 0.08); // +3.20mm safe curve
+    harnessGroup.add(ghostWireObj);
+
+    root.add(harnessGroup);
+    animatedPartsList.push(harnessGroup);
+
+    cadModelGroup.add(root);
+  }
+
+  // Model 2: NASA Deep Space Ion Thruster Core
+  function buildIonThrusterModel() {
+    const root = new THREE.Group();
+    root.position.y = 0.65;
+
+    // Anode Grid Shell
+    const shellGeo = new THREE.CylinderGeometry(0.72, 0.72, 0.9, 32, 1, true);
+    const shellMat = new THREE.MeshStandardMaterial({ color: 0x334155, wireframe: true });
+    outerCasingObj = new THREE.Mesh(shellGeo, shellMat);
+    outerCasingObj.userData = { id: 'anode', explodeVec: new THREE.Vector3(0, 0.35, 0) };
+    root.add(outerCasingObj);
+    animatedPartsList.push(outerCasingObj);
+
+    // Xenon Ionization Chamber
+    const coreGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.75, 24);
+    const coreMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, emissive: 0x0369a1, emissiveIntensity: 0.8 });
+    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+    coreMesh.userData = { id: 'xenon', explodeVec: new THREE.Vector3(0, 0, 0) };
+    root.add(coreMesh);
+    animatedPartsList.push(coreMesh);
+
+    // 3 Solenoid Magnet Rings
+    for (let s = 0; s < 3; s++) {
+      const ringGeo = new THREE.TorusGeometry(0.55, 0.035, 12, 32);
+      const ringMat = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.9 });
+      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+      ringMesh.rotation.x = Math.PI / 2;
+      ringMesh.position.y = (s * 0.28) - 0.28;
+      root.add(ringMesh);
+    }
+
+    // High-Voltage Cathode Wire Clash
+    const clashGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.85, 12);
+    const clashMat = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xf59e0b, emissiveIntensity: 1.3 });
+    clashingWireObj = new THREE.Mesh(clashGeo, clashMat);
+    clashingWireObj.position.set(0.48, 0, 0);
+    clashingWireObj.userData = { id: 'wire', explodeVec: new THREE.Vector3(0.3, 0, 0) };
+    root.add(clashingWireObj);
+    animatedPartsList.push(clashingWireObj);
+
+    // Safe Ghost Wire
+    const ghostGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.88, 12);
+    const ghostMat = new THREE.MeshStandardMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.5 });
+    ghostWireObj = new THREE.Mesh(ghostGeo, ghostMat);
+    ghostWireObj.position.set(0.60, 0, 0.06);
+    root.add(ghostWireObj);
+
+    // Plasma Beam Glow
+    const beamGeo = new THREE.CylinderGeometry(0.35, 0.65, 1.2, 24, 1, true);
+    const beamMat = new THREE.MeshStandardMaterial({ color: 0x00f0ff, emissive: 0x00d4ff, emissiveIntensity: 1.8, transparent: true, opacity: 0.6 });
+    const beamMesh = new THREE.Mesh(beamGeo, beamMat);
+    beamMesh.position.y = -0.95;
+    root.add(beamMesh);
+
+    cadModelGroup.add(root);
+  }
+
+  // Model 3: Cryogenic Turbopump Impeller Core
+  function buildTurbopumpModel() {
+    const root = new THREE.Group();
+    root.position.y = 0.65;
+
+    // Volute Spiral Casing
+    const voluteGeo = new THREE.TorusGeometry(0.65, 0.28, 16, 48);
+    const voluteMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.92, roughness: 0.2 });
+    outerCasingObj = new THREE.Mesh(voluteGeo, voluteMat);
+    outerCasingObj.rotation.x = Math.PI / 2;
+    outerCasingObj.userData = { id: 'volute', explodeVec: new THREE.Vector3(0, 0.4, 0) };
+    root.add(outerCasingObj);
+    animatedPartsList.push(outerCasingObj);
+
+    // Rotating Impeller & Inducer
+    const impellerGroup = new THREE.Group();
+    impellerGroup.userData = { id: 'impeller', explodeVec: new THREE.Vector3(0, 0, 0.3) };
+    const shaftGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.1, 16);
+    const shaftMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.98, roughness: 0.1 });
+    const shaftMesh = new THREE.Mesh(shaftGeo, shaftMat);
+    impellerGroup.add(shaftMesh);
+
+    for (let i = 0; i < 8; i++) {
+      const iAngle = (i / 8) * Math.PI * 2;
+      const bGeo = new THREE.BoxGeometry(0.03, 0.12, 0.35);
+      const bMesh = new THREE.Mesh(bGeo, shaftMat);
+      bMesh.position.set(Math.sin(iAngle) * 0.26, 0, Math.cos(iAngle) * 0.26);
+      bMesh.rotation.set(0.4, iAngle, 0);
+      impellerGroup.add(bMesh);
+    }
+    root.add(impellerGroup);
+    rotatingImpellerObj = impellerGroup;
+    animatedPartsList.push(impellerGroup);
+
+    // Needle Bearing Friction Clash
+    const bearingGeo = new THREE.TorusGeometry(0.24, 0.06, 12, 24);
+    const bearingMat = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xf59e0b, emissiveIntensity: 1.2 });
+    clashingWireObj = new THREE.Mesh(bearingGeo, bearingMat);
+    clashingWireObj.rotation.x = Math.PI / 2;
+    clashingWireObj.position.set(0.12, 0.35, 0); // off-center friction clash
+    clashingWireObj.userData = { id: 'bearing', explodeVec: new THREE.Vector3(0.25, 0.2, 0) };
+    root.add(clashingWireObj);
+    animatedPartsList.push(clashingWireObj);
+
+    // Safe Ghost Bearing Alignment
+    const ghostBearingGeo = new THREE.TorusGeometry(0.24, 0.06, 12, 24);
+    const ghostBearingMat = new THREE.MeshStandardMaterial({ color: 0x00ff88, transparent: true, opacity: 0.5 });
+    ghostWireObj = new THREE.Mesh(ghostBearingGeo, ghostBearingMat);
+    ghostWireObj.rotation.x = Math.PI / 2;
+    ghostWireObj.position.set(0, 0.35, 0); // nominal concentric alignment
+    root.add(ghostWireObj);
+
+    cadModelGroup.add(root);
+  }
+
+  function updateOutlinerUI(modelKey) {
+    const grid = document.getElementById('cadOutlinerGrid');
+    const badge = document.getElementById('cadActiveBadge');
+    const countSpan = document.getElementById('outlinerSubsystemCount');
+    if (!grid) return;
+
+    const preset = CAD_PRESETS[modelKey] || CAD_PRESETS.raptor;
+    if (badge) badge.innerText = `🚀 ${preset.name} • Active`;
+    if (countSpan) countSpan.innerText = `${preset.subsystems.length} SUBSYSTEMS DETECTED`;
+
+    grid.innerHTML = '';
+    preset.subsystems.forEach(sub => {
+      const card = document.createElement('div');
+      card.className = 'cad-part-card';
+      card.style.borderLeftColor = sub.color;
+      card.innerHTML = `
+        <div style="font-weight:bold; color:#f8fafc; font-size:10px; margin-bottom:2px;">${sub.name}</div>
+        <div style="font-size:8px; color:#94a3b8;">Tolerance: ${sub.spec} &bull; Click to isolate in 3D</div>
+      `;
+      card.onclick = () => focusCadPart(sub.id);
+      grid.appendChild(card);
+    });
+  }
+
+  function switchCadModel(modelKey) {
+    activeCadModelKey = modelKey;
+    isCadWireCommitted = false;
+    document.querySelectorAll('.cad-preset-btn').forEach(b => b.classList.remove('active'));
+    if (modelKey === 'raptor') document.getElementById('btnModelRaptor')?.classList.add('active');
+    else if (modelKey === 'ion') document.getElementById('btnModelIon')?.classList.add('active');
+    else if (modelKey === 'turbopump') document.getElementById('btnModelPump')?.classList.add('active');
+
+    buildCadModel(modelKey);
+    resetCadCamera();
+    callAction('preset_' + modelKey);
+    SpatialAudio.playPing();
+    showControllerToast("🚀 LOADED CAD MODEL: " + CAD_PRESETS[modelKey].name.toUpperCase());
+  }
+
+  function switchRoomTheme(roomKey) {
+    activeCadRoomKey = roomKey;
+    document.querySelectorAll('.cad-room-btn').forEach(b => b.classList.remove('active'));
+    if (roomKey === 'hangar') document.getElementById('btnRoomHangar')?.classList.add('active');
+    else if (roomKey === 'cleanroom') document.getElementById('btnRoomCleanroom')?.classList.add('active');
+    else if (roomKey === 'mars') document.getElementById('btnRoomMars')?.classList.add('active');
+
+    const roomBadge = document.getElementById('cadRoomBadge');
+    if (roomBadge) {
+      if (roomKey === 'cleanroom') roomBadge.innerText = '⚪ Quantum Cleanroom';
+      else if (roomKey === 'mars') roomBadge.innerText = '🪐 Mars Outpost Bay';
+      else roomBadge.innerText = '🌌 CyberHangar';
+    }
+
+    buildCadRoom(roomKey);
+    callAction('room_' + roomKey);
+    SpatialAudio.playTheme();
+    showControllerToast("🏛️ SWITCHED ROOM: " + roomKey.toUpperCase());
+  }
+
+  function toggleCadExplode() {
+    isCadExploded = !isCadExploded;
+    const btn = document.getElementById('btnToolExplode');
+    if (btn) btn.classList.toggle('active', isCadExploded);
+
+    animatedPartsList.forEach(part => {
+      if (part.userData && part.userData.explodeVec) {
+        const target = isCadExploded ? part.userData.explodeVec : new THREE.Vector3(0, 0, 0);
+        part.position.copy(target);
+      }
+    });
+    SpatialAudio.playAction();
+    showControllerToast(isCadExploded ? "💥 ASSEMBLY EXPLODED (100%)" : "📦 ASSEMBLY ASSEMBLED (0%)");
+  }
+
+  function toggleCadXRay() {
+    isCadXRay = !isCadXRay;
+    const btn = document.getElementById('btnToolXRay');
+    if (btn) btn.classList.toggle('active', isCadXRay);
+
+    if (outerCasingObj && outerCasingObj.material) {
+      outerCasingObj.material.transparent = isCadXRay;
+      outerCasingObj.material.opacity = isCadXRay ? 0.25 : 1.0;
+      outerCasingObj.material.wireframe = isCadXRay;
+      outerCasingObj.material.needsUpdate = true;
+    }
+    callAction('xray');
+    SpatialAudio.playAction();
+    showControllerToast(isCadXRay ? "👁️ X-RAY GLASS ACTIVATED" : "👁️ SOLID TITANIUM RESTORED");
+  }
+
+  function toggleCadRotation() {
+    isCadAutoRotate = !isCadAutoRotate;
+    const btn = document.getElementById('btnToolRotate');
+    if (btn) btn.classList.toggle('active', isCadAutoRotate);
+    showControllerToast(isCadAutoRotate ? "🔄 AUTO-ROTATE ENABLED" : "⏸️ AUTO-ROTATE PAUSED");
+  }
+
+  function resetCadCamera() {
+    if (cadControls && cadCamera) {
+      cadCamera.position.set(2.4, 1.8, 2.7);
+      cadControls.target.set(0, 0.45, 0);
+      cadControls.update();
+      showControllerToast("🎯 3D CAMERA RESET");
+    }
+  }
+
+  function focusCadPart(partId) {
+    const part = animatedPartsList.find(p => p.userData && p.userData.id === partId);
+    if (part && cadControls && cadCamera) {
+      const worldPos = new THREE.Vector3();
+      part.getWorldPosition(worldPos);
+      cadControls.target.copy(worldPos);
+      cadCamera.position.set(worldPos.x + 0.9, worldPos.y + 0.4, worldPos.z + 0.9);
+      cadControls.update();
+      SpatialAudio.playPing();
+      showControllerToast(`🎯 FOCUSED: ${partId.toUpperCase()}`);
+    }
+  }
+
+  // Render Loop
+  let lastTime = 0;
+  function animateCadStudio(time) {
+    requestAnimationFrame(animateCadStudio);
+    const dt = (time - lastTime) * 0.001;
+    lastTime = time;
+
+    // Spin Impeller
+    if (rotatingImpellerObj) {
+      rotatingImpellerObj.rotation.y += 0.8 * dt;
+    }
+
+    // Auto-Rotate Model
+    if (isCadAutoRotate && cadModelGroup) {
+      cadModelGroup.rotation.y += 0.25 * dt;
+    }
+
+    // Pulse Clashing Wire if Hazard Active
+    if (clashingWireObj && clashingWireObj.material && !isCadWireCommitted) {
+      const pulse = 1.0 + Math.sin(time * 0.006) * 0.4;
+      if (clashingWireObj.material.emissiveIntensity !== undefined) {
+        clashingWireObj.material.emissiveIntensity = pulse;
+      }
+    }
+
+    if (cadControls) cadControls.update();
+    if (cadRenderer && cadScene && cadCamera) {
+      cadRenderer.render(cadScene, cadCamera);
+    }
+  }
+
+  // 12. Aerospace Wire-Harness Consensus Protocol (AGREE / DISAGREE)
   function handleAgreeAction() {
     callAction('agree');
+    isCadWireCommitted = true;
+
+    // Three.js 3D Model Reaction:
+    if (clashingWireObj && ghostWireObj) {
+      // Move clashing wire into safe ghost position
+      clashingWireObj.position.copy(ghostWireObj.position);
+      // Turn wire to safe Emerald Green
+      if (clashingWireObj.material) {
+        clashingWireObj.material.color.setHex(0x00ff88);
+        clashingWireObj.material.emissive.setHex(0x00f0ff);
+        clashingWireObj.material.emissiveIntensity = 0.8;
+      }
+      // Hide ghost wire since re-route is now permanent
+      ghostWireObj.visible = false;
+    }
+
     const badge = document.getElementById('consensusBadge');
     const prompt = document.getElementById('consensusPrompt');
     const card = document.getElementById('consensusCard');
-    const outWire = document.getElementById('outlinerWire');
+    const clearanceText = document.getElementById('cadClearanceText');
 
     if (badge) {
       badge.innerText = '✅ CONSENSUS COMMITTED: WIRE RE-ROUTE LOCKED (0 ERROR)';
@@ -1971,25 +2734,39 @@
       badge.style.color = '#00ff88';
       badge.style.borderColor = '#00ff88';
     }
-    if (card) {
-      card.style.borderLeftColor = '#00ff88';
-    }
+    if (card) card.style.borderLeftColor = '#00ff88';
     if (prompt) {
-      prompt.innerHTML = 'Harness Line 04 successfully locked into nominal safe quadrant. Collision cleared. <strong>Plasma thrusters online!</strong>';
+      prompt.innerHTML = 'Harness Line 04 successfully locked into nominal safe quadrant (+3.20mm clearance). Collision cleared. <strong>Engine Ready for Ignition!</strong>';
     }
-    if (outWire) {
-      outWire.innerHTML = '⚡ Wire 04: Locked & Verified [✅ 0 ERROR]';
-      outWire.style.color = '#00ff88';
-      outWire.style.borderLeftColor = '#00ff88';
+    if (clearanceText) {
+      clearanceText.innerHTML = '✅ CLEARANCE: +3.20 mm (SAFE & LOCKED)';
+      clearanceText.style.color = '#00ff88';
+      clearanceText.style.borderColor = 'rgba(0,255,136,0.4)';
     }
+
+    SpatialAudio.playPing();
     showControllerToast("✅ [AGREE] WIRE HARNESS COMMITTED TO ENGINE");
   }
 
   function handleDisagreeAction() {
     callAction('disagree');
+    isCadWireCommitted = false;
+
+    // Three.js 3D Model Reaction: Revert to baseline clashing state
+    if (clashingWireObj && ghostWireObj) {
+      clashingWireObj.position.set(0.43, 0.02, 0.02);
+      if (clashingWireObj.material) {
+        clashingWireObj.material.color.setHex(0xef4444);
+        clashingWireObj.material.emissive.setHex(0xf59e0b);
+        clashingWireObj.material.emissiveIntensity = 1.4;
+      }
+      ghostWireObj.visible = true;
+    }
+
     const badge = document.getElementById('consensusBadge');
     const prompt = document.getElementById('consensusPrompt');
     const card = document.getElementById('consensusCard');
+    const clearanceText = document.getElementById('cadClearanceText');
 
     if (badge) {
       badge.innerText = '✕ PROPOSAL REJECTED (REVERTED TO BASELINE)';
@@ -1997,31 +2774,30 @@
       badge.style.color = '#f87171';
       badge.style.borderColor = '#ef4444';
     }
-    if (card) {
-      card.style.borderLeftColor = '#ef4444';
-    }
+    if (card) card.style.borderLeftColor = '#ef4444';
     if (prompt) {
-      prompt.innerHTML = 'Proposed re-route cancelled. Wire harness reverted safely to baseline state.';
+      prompt.innerHTML = 'Proposed re-route cancelled. Wire harness reverted safely to baseline state with clash hazard.';
     }
+    if (clearanceText) {
+      clearanceText.innerHTML = '⚠️ Wire Clash Clearance: 0.00 mm (Re-Route Required)';
+      clearanceText.style.color = '#e5a93b';
+      clearanceText.style.borderColor = 'rgba(229,169,59,0.4)';
+    }
+
+    SpatialAudio.playAction();
     showControllerToast("✕ [DISAGREE] PROPOSAL REJECTED: REVERTED");
   }
 
-  // 12. Drag & Drop Custom 3D CAD File Loader
+  // 13. Drag & Drop Custom 3D CAD File Loader (GLTF / OBJ Loader)
   function handleDragOver(e) {
     e.preventDefault();
-    const zone = document.getElementById('cadDropZone');
-    if (zone) {
-      zone.style.borderColor = '#00f0ff';
-      zone.style.background = 'rgba(0,240,255,0.15)';
-    }
+    const c = document.getElementById('cad3DContainer');
+    if (c) c.style.borderColor = '#00f0ff';
   }
 
   function handleDragLeave(e) {
-    const zone = document.getElementById('cadDropZone');
-    if (zone) {
-      zone.style.borderColor = '#334155';
-      zone.style.background = 'rgba(15,23,42,0.6)';
-    }
+    const c = document.getElementById('cad3DContainer');
+    if (c) c.style.borderColor = '#1e3a5f';
   }
 
   function handleFileDrop(e) {
@@ -2039,21 +2815,47 @@
   }
 
   function processCadFile(file) {
-    if (!file) return;
-    const nameSpan = document.getElementById('cadFileName');
-    const sizeKb = (file.size / 1024).toFixed(1);
-    if (nameSpan) {
-      nameSpan.innerHTML = `📂 <strong>Custom CAD Loaded:</strong> ${file.name} (${sizeKb} KB) &bull; Epistemic Funneling & Consensus Active!`;
-      nameSpan.style.color = '#00f0ff';
-    }
-    SpatialAudio.playPing();
-    showControllerToast("📂 LOADED CUSTOM 3D CAD: " + file.name.toUpperCase());
+    if (!file || !cadModelGroup) return;
+    const fileName = file.name.toLowerCase();
+    const reader = new FileReader();
 
-    // Dispatch to embedded 3D WebGL engine
-    const iframe = document.getElementById('liveWebglFrame');
-    if (iframe && iframe.contentWindow) {
-      iframe.contentWindow.postMessage({ type: 'load_model', fileName: file.name }, '*');
+    if (fileName.endsWith('.glb') || fileName.endsWith('.gltf')) {
+      reader.onload = function(evt) {
+        if (typeof THREE.GLTFLoader !== 'undefined') {
+          const loader = new THREE.GLTFLoader();
+          loader.parse(evt.target.result, '', function(gltf) {
+            while (cadModelGroup.children.length > 0) cadModelGroup.remove(cadModelGroup.children[0]);
+            cadModelGroup.add(gltf.scene);
+            resetCadCamera();
+            SpatialAudio.playPing();
+            showControllerToast("📂 CUSTOM GLTF LOADED: " + file.name.toUpperCase());
+          });
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else if (fileName.endsWith('.obj')) {
+      reader.onload = function(evt) {
+        if (typeof THREE.OBJLoader !== 'undefined') {
+          const loader = new THREE.OBJLoader();
+          const obj = loader.parse(evt.target.result);
+          while (cadModelGroup.children.length > 0) cadModelGroup.remove(cadModelGroup.children[0]);
+          cadModelGroup.add(obj);
+          resetCadCamera();
+          SpatialAudio.playPing();
+          showControllerToast("📂 CUSTOM OBJ LOADED: " + file.name.toUpperCase());
+        }
+      };
+      reader.readAsText(file);
+    } else {
+      showControllerToast("⚠️ Supported: .glb, .gltf, .obj");
     }
+  }
+
+  // Initialize CAD Studio 3D on page load
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(initCadStudio3D, 50);
+  } else {
+    window.addEventListener('DOMContentLoaded', () => setTimeout(initCadStudio3D, 50));
   }
 
   // Initialize Global Cloud Tracker and initial Metaverse linkage
