@@ -94,29 +94,20 @@ namespace OmniOS.Core
 
             DockBtnDef[] defs = new DockBtnDef[]
             {
-                new DockBtnDef("🔄 Reload", () => osManager?.FullSystemReload(), new Color(0.0f, 1.0f, 0.9f)),
+                new DockBtnDef("🚀 Model", () => HoloBridge.Collaboration.SharedDigitalTwinAssembly.Instance?.CycleNextPreset(), new Color(0.0f, 0.95f, 1.0f)),
+                new DockBtnDef("🏛️ Room", () => MetaverseEnvironmentManager.Instance?.ToggleCleanRoom(), new Color(0.8f, 0.45f, 1.0f)),
+                new DockBtnDef("✅ Agree", () => HoloBridge.Collaboration.SharedDigitalTwinAssembly.Instance?.CommitProposal(), new Color(0.0f, 1.0f, 0.55f)),
+                new DockBtnDef("❌ Disagree", () => HoloBridge.Collaboration.SharedDigitalTwinAssembly.Instance?.RejectProposal(), new Color(1.0f, 0.35f, 0.35f)),
+                new DockBtnDef("💥 Explode", () => HoloBridge.Collaboration.SharedDigitalTwinAssembly.Instance?.ToggleExplodedView(), new Color(1.0f, 0.65f, 0.15f)),
+                new DockBtnDef("👁️ X-Ray", () => HoloBridge.Collaboration.SharedDigitalTwinAssembly.Instance?.ToggleXRay(), new Color(0.2f, 0.85f, 1.0f)),
                 new DockBtnDef("📱 Android", () => osManager?.ToggleApp("media_hub"), new Color(0.2f, 0.95f, 0.55f)),
                 new DockBtnDef(" Apps", () => OmniAppLauncherBox.Instance?.ToggleLaunchpad(), new Color(1.0f, 0.75f, 0.15f)),
-                new DockBtnDef("🔮 Peel", () => OmniGenesis.Core.OmniGenesis5DExperience.Instance?.TriggerRealityPeel(), new Color(0.0f, 0.95f, 1.0f)),
-                new DockBtnDef("⚛️ Matter", () => {
-                    var exp = OmniGenesis.Core.OmniGenesis5DExperience.Instance;
-                    if (exp != null)
-                    {
-                        int next = ((int)exp.CurrentStiffness + 1) % 3;
-                        exp.SetStiffness((OmniGenesis.Core.OmniGenesis5DExperience.MaterialStiffness)next);
-                    }
-                }, new Color(1.0f, 0.55f, 0.15f)),
-                new DockBtnDef("⏳ Orbs", () => OmniGenesis.Core.OmniGenesis5DExperience.Instance?.ToggleMultiverseOrbs(), new Color(0.85f, 0.45f, 1.0f)),
-                new DockBtnDef("🤝 Handoff", () => OmniGenesis.Core.OmniGenesis5DExperience.Instance?.TriggerHandoff(), new Color(0.2f, 0.95f, 0.55f)),
-                new DockBtnDef("📷 Cam", () => osManager?.ToggleApp("camera"), new Color(0.25f, 0.95f, 0.55f)),
-                new DockBtnDef("🌌 Scene", () => osManager?.ToggleApp("scenery"), new Color(0.35f, 0.85f, 1.0f)),
-                new DockBtnDef("🖼️ Photos", () => osManager?.ToggleApp("gallery"), new Color(0.45f, 0.65f, 1.0f)),
                 new DockBtnDef("🎨 Theme", () => {
                     var env = UnityEngine.Object.FindAnyObjectByType<MetaverseEnvironmentManager>();
                     env?.NextTheme();
                     SpatialAudioEngine.Instance?.PlayThemeChime();
                 }, new Color(0.95f, 0.55f, 0.85f)),
-                new DockBtnDef("👁️ Zen", () => osManager?.ToggleCleanView(), new Color(0.6f, 0.65f, 0.75f))
+                new DockBtnDef("🔄 Reload", () => osManager?.FullSystemReload(), new Color(0.0f, 1.0f, 0.9f))
             };
 
             int count = defs.Length;
@@ -125,6 +116,11 @@ namespace OmniOS.Core
             float spacing = 0.016f;
             float totalWidth = count * btnWidth + (count - 1) * spacing;
             float startX = -totalWidth * 0.5f + btnWidth * 0.5f;
+
+            if (dockBackplate != null)
+            {
+                dockBackplate.transform.localScale = new Vector3(totalWidth + 0.16f, 0.19f, 1f);
+            }
 
             for (int i = 0; i < count; i++)
             {

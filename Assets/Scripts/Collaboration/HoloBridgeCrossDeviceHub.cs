@@ -2787,6 +2787,42 @@ namespace HoloBridge.Collaboration
 
             GUILayout.EndArea();
 
+            // 1B. Top-Right Aerospace CAD & Consensus Control Console (Unity Editor & Standalone PC)
+            float cadPanelW = 380f;
+            float cadPanelH = 175f;
+            float cadPanelX = Screen.width - cadPanelW - 16f;
+            float cadPanelY = 55f;
+
+            GUILayout.BeginArea(new Rect(cadPanelX, cadPanelY, cadPanelW, cadPanelH), GUI.skin.box);
+            GUILayout.Label("<b>🚀 AEROSPACE CAD & CONSENSUS CONSOLE</b>");
+            var twin = SharedDigitalTwinAssembly.Instance;
+            string modelName = twin != null ? twin.CurrentModelPreset.ToString() : "SpaceXRaptor3";
+            string statusStr = twin != null && twin.IsProposalCommitted ? "<color=#00ff88>✅ LOCKED: +3.20mm (SAFE)</color>" : "<color=#ffaa00>⚠️ CLASH: Line 04 (0.00mm)</color>";
+            GUILayout.Label($"<color=#7ab0d6>Active CAD Model:</color> <color=#00f0ff>{modelName}</color>  |  {statusStr}");
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("🚀 Raptor 3 [1]", GUILayout.Height(24))) twin?.SetModelPreset(0);
+            if (GUILayout.Button("⚡ Ion Thruster [2]", GUILayout.Height(24))) twin?.SetModelPreset(1);
+            if (GUILayout.Button("⚙️ Turbopump [3]", GUILayout.Height(24))) twin?.SetModelPreset(2);
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("🏛️ Cleanroom [R]", GUILayout.Height(24))) MetaverseEnvironmentManager.Instance?.ToggleCleanRoom();
+            if (GUILayout.Button("💥 Explode [X]", GUILayout.Height(24))) twin?.ToggleExplodedView();
+            if (GUILayout.Button("👁️ X-Ray [Z]", GUILayout.Height(24))) twin?.ToggleXRay();
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUI.backgroundColor = new Color(0.0f, 0.95f, 0.55f);
+            if (GUILayout.Button("✅ [AGREE] COMMIT [Y]", GUILayout.Height(26))) twin?.CommitProposal();
+            GUI.backgroundColor = new Color(0.95f, 0.35f, 0.35f);
+            if (GUILayout.Button("❌ [DISAGREE] REVERT [N]", GUILayout.Height(26))) twin?.RejectProposal();
+            GUI.backgroundColor = Color.white;
+            GUILayout.EndHorizontal();
+
+            GUILayout.Label("<size=9><color=#64748b>Quick-Keys: 1, 2, 3 (Models) • R (Room) • Y/N (Consensus) • X (Explode) • Z (X-Ray)</color></size>");
+            GUILayout.EndArea();
+
             // 2. On-Screen Mobile Phone Simulator (Toggle with 'M' key)
             if (showMobileSimulator)
             {

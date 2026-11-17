@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using OmniOS.Core;
+using OmniOS.Interaction;
+using OmniOS.Environment;
 
 namespace HoloBridge.Collaboration
 {
@@ -111,6 +113,12 @@ namespace HoloBridge.Collaboration
             SpatialAudioEngine.Instance?.PlayNotificationChime();
         }
 
+        public void CycleNextPreset()
+        {
+            int next = ((int)currentModelPreset + 1) % 3;
+            SetModelPreset(next);
+        }
+
         [Header("Aerospace Wire-Harness & Consensus State")]
         [SerializeField] private bool hasCableCollision = true;
         [SerializeField] private bool isProposalActive = false;
@@ -201,6 +209,16 @@ namespace HoloBridge.Collaboration
                     fan.gameObject.transform.Rotate(Vector3.forward, rotationSpeed * Time.deltaTime, Space.Self);
                 }
             }
+
+            // Direct Quick-Keys for Unity Editor & VR Testing:
+            if (Input.GetKeyDown(KeyCode.Alpha1)) SetModelPreset(0);
+            if (Input.GetKeyDown(KeyCode.Alpha2)) SetModelPreset(1);
+            if (Input.GetKeyDown(KeyCode.Alpha3)) SetModelPreset(2);
+            if (Input.GetKeyDown(KeyCode.R)) MetaverseEnvironmentManager.Instance?.ToggleCleanRoom();
+            if (Input.GetKeyDown(KeyCode.Y)) CommitProposal();
+            if (Input.GetKeyDown(KeyCode.N)) RejectProposal();
+            if (Input.GetKeyDown(KeyCode.Z)) ToggleXRay();
+            if (Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.X)) ToggleExplodedView();
         }
 
         public AssemblyPart GetPart(ComponentType type)
@@ -267,9 +285,117 @@ namespace HoloBridge.Collaboration
             // 7. Layer 6: Holographic Safe Re-Route Ghost Proxy (+3.2mm Clearance)
             CreateGhostWiringProxy(litShader);
 
+            // 8. In-World VR Holographic Mission Console (For Meta Quest 3 & XR direct interaction)
+            BuildWorldSpaceVRConsole(litShader);
+
             UpdatePartPositions();
             UpdateMaterials();
         }
+
+        #region VR World-Space Holographic Console
+        private GameObject vrConsoleRoot;
+        private TextMesh consoleStatusTextMesh;
+
+        private void BuildWorldSpaceVRConsole(Shader litShader)
+        {
+            if (vrConsoleRoot != null) Destroy(vrConsoleRoot);
+
+            vrConsoleRoot = new GameObject("VR_Aerospace_HoloConsole");
+            vrConsoleRoot.transform.SetParent(assemblyRoot, false);
+            // Positioned conveniently to the right of the engine, tilted towards user
+            vrConsoleRoot.transform.localPosition = new Vector3(0.92f, 0.15f, -0.15f);
+            vrConsoleRoot.transform.localRotation = Quaternion.Euler(0f, -28f, 0f);
+
+            // Floating Glass Backplate
+            GameObject backplate = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            backplate.name = "Console_GlassBackplate";
+            backplate.transform.SetParent(vrConsoleRoot.transform, false);
+            backplate.transform.localScale = new Vector3(0.95f, 0.72f, 1f);
+            var colliders = backplate.GetComponents<Collider>();
+            foreach (var c in colliders) Destroy(c);
+
+            Material glassMat = SpatialTheme.CreateGlassMaterial(
+                new Color(0.05f, 0.08f, 0.14f, 0.94f),
+                new Color(0.0f, 0.95f, 1.0f, 0.8f)
+            );
+            backplate.GetComponent<Renderer>().material = glassMat;
+
+            // Header Text
+            GameObject headerObj = new GameObject("Console_Header");
+            headerObj.transform.SetParent(vrConsoleRoot.transform, false);
+            headerObj.transform.localPosition = new Vector3(0f, 0.28f, -0.015f);
+            var tm = headerObj.AddComponent<TextMesh>();
+            tm.text = "🚀 AEROSPACE CAD CONSOLE";
+            tm.fontSize = 24;
+            tm.characterSize = 0.014f;
+            tm.anchor = TextAnchor.MiddleCenter;
+            tm.color = new Color(0.0f, 0.95f, 1.0f);
+
+            // Status Text
+            GameObject statusObj = new GameObject("Console_Status");
+            statusObj.transform.SetParent(vrConsoleRoot.transform, false);
+            statusObj.transform.localPosition = new Vector3(0f, 0.21f, -0.015f);
+            consoleStatusTextMesh = statusObj.AddComponent<TextMesh>();
+            consoleStatusTextMesh.fontSize = 18;
+            consoleStatusTextMesh.characterSize = 0.012f;
+            consoleStatusTextMesh.anchor = TextAnchor.MiddleCenter;
+            UpdateConsoleStatusText();
+
+            // 3D Spatial Buttons (Interactable with VR laser ray and finger poke)
+            CreateConsoleButton("🚀 Raptor 3", new Vector3(-0.28f, 0.10f, -0.02f), new Vector2(0.26f, 0.07f), () => SetModelPreset(0), new Color(0.0f, 0.85f, 1.0f));
+            CreateConsoleButton("⚡ Ion Thruster", new Vector3(0f, 0.10f, -0.02f), new Vector2(0.26f, 0.07f), () => SetModelPreset(1), new Color(0.2f, 0.85f, 1.0f));
+            CreateConsoleButton("⚙️ Turbopump", new Vector3(0.28f, 0.10f, -0.02f), new Vector2(0.26f, 0.07f), () => SetModelPreset(2), new Color(0.3f, 0.95f, 0.6f));
+
+            CreateConsoleButton("🏛️ Cleanroom", new Vector3(-0.28f, 0.00f, -0.02f), new Vector2(0.26f, 0.07f), () => MetaverseEnvironmentManager.Instance?.ToggleCleanRoom(), new Color(0.8f, 0.45f, 1.0f));
+            CreateConsoleButton("💥 Explode", new Vector3(0f, 0.00f, -0.02f), new Vector2(0.26f, 0.07f), () => ToggleExplodedView(), new Color(1.0f, 0.65f, 0.15f));
+            CreateConsoleButton("👁️ X-Ray", new Vector3(0.28f, 0.00f, -0.02f), new Vector2(0.26f, 0.07f), () => ToggleXRay(), new Color(0.2f, 0.85f, 1.0f));
+
+            // Big Consensus Buttons (Row 3)
+            CreateConsoleButton("✅ AGREE [Commit]", new Vector3(-0.20f, -0.14f, -0.02f), new Vector2(0.38f, 0.09f), () => CommitProposal(), new Color(0.0f, 1.0f, 0.55f));
+            CreateConsoleButton("❌ DISAGREE [Revert]", new Vector3(0.20f, -0.14f, -0.02f), new Vector2(0.38f, 0.09f), () => RejectProposal(), new Color(1.0f, 0.35f, 0.35f));
+
+            // Footer Hint
+            GameObject footerObj = new GameObject("Console_Footer");
+            footerObj.transform.SetParent(vrConsoleRoot.transform, false);
+            footerObj.transform.localPosition = new Vector3(0f, -0.26f, -0.015f);
+            var footTm = footerObj.AddComponent<TextMesh>();
+            footTm.text = "VR: Aim Controller Laser or Poke with Finger • PC: Keys 1,2,3,R,Y,N,X,Z";
+            footTm.fontSize = 14;
+            footTm.characterSize = 0.009f;
+            footTm.anchor = TextAnchor.MiddleCenter;
+            footTm.color = new Color(0.45f, 0.55f, 0.65f);
+        }
+
+        private void CreateConsoleButton(string label, Vector3 localPos, Vector2 size, Action onClick, Color accentCol)
+        {
+            GameObject btnObj = new GameObject($"VRBtn_{label.Replace(" ", "_")}");
+            btnObj.transform.SetParent(vrConsoleRoot.transform, false);
+            btnObj.transform.localPosition = localPos;
+
+            var spatialBtn = btnObj.AddComponent<SpatialButton3D>();
+            spatialBtn.ButtonText = label;
+            spatialBtn.SetSize(size.x, size.y);
+            spatialBtn.SetColors(new Color(0.08f, 0.11f, 0.16f, 0.95f), accentCol);
+            spatialBtn.onClick.AddListener(() => onClick?.Invoke());
+        }
+
+        private void UpdateConsoleStatusText()
+        {
+            if (consoleStatusTextMesh == null) return;
+            if (isProposalCommitted)
+            {
+                consoleStatusTextMesh.text = $"Model: {currentModelPreset} • <color=#00ff88>LOCKED: +3.20mm (SAFE)</color>";
+            }
+            else if (isProposalActive)
+            {
+                consoleStatusTextMesh.text = $"Model: {currentModelPreset} • <color=#00f0ff>GHOST ACTIVE (+3.20mm)</color>";
+            }
+            else
+            {
+                consoleStatusTextMesh.text = $"Model: {currentModelPreset} • <color=#ffaa00>CLASH: Line 04 (0.00mm)</color>";
+            }
+        }
+        #endregion
 
         private void CreateOuterCasing(Shader litShader)
         {
