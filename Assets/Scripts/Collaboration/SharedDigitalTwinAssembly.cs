@@ -133,7 +133,7 @@ namespace HoloBridge.Collaboration
 
             UpdateMaterials();
             OmniOSManager.Instance?.ShowNotificationToast("✅ [AGREE] CONSENSUS COMMITTED: WIRE RE-ROUTE LOCKED!");
-            SpatialAudioEngine.Instance?.PlayPositivePing();
+            SpatialAudioEngine.Instance?.PlayNotificationChime();
             return true;
         }
 
@@ -150,7 +150,7 @@ namespace HoloBridge.Collaboration
 
             UpdateMaterials();
             OmniOSManager.Instance?.ShowNotificationToast("✕ [DISAGREE] PROPOSAL REJECTED: REVERTED TO BASELINE");
-            SpatialAudioEngine.Instance?.PlayNegativeBuzz();
+            SpatialAudioEngine.Instance?.PlayButtonClick();
             return true;
         }
 
@@ -492,7 +492,7 @@ namespace HoloBridge.Collaboration
                 float angle = i * 45f + 15f;
                 GameObject wire = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 wire.name = $"HarnessCable_{i + 1}";
-                wire.transform.SetParent(harnessRoot, false);
+                wire.transform.SetParent(harnessRoot.transform, false);
                 wire.transform.localScale = new Vector3(0.022f, 0.28f, 0.022f);
                 wire.transform.localPosition = Quaternion.Euler(0, 0, angle) * new Vector3(0.24f, 0, 0);
                 wire.transform.localRotation = Quaternion.Euler(90f, 0, angle);
@@ -544,7 +544,7 @@ namespace HoloBridge.Collaboration
 
             GameObject ghostTube = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             ghostTube.name = "GhostWire_SafePath";
-            ghostTube.transform.SetParent(ghostRoot, false);
+            ghostTube.transform.SetParent(ghostRoot.transform, false);
             ghostTube.transform.localScale = new Vector3(0.026f, 0.29f, 0.026f);
             ghostTube.transform.localPosition = Quaternion.Euler(0, 0, 150f) * new Vector3(0.28f, 0, 0);
             ghostTube.transform.localRotation = Quaternion.Euler(90f, 0, 150f);
