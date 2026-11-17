@@ -708,6 +708,65 @@
         <span style="font-size:9px; color:#ffaa00; background:rgba(255,170,0,0.18); border:1px solid #ffaa00; padding:2px 6px; border-radius:3px;">ALL PLATFORMS ENABLED</span>
       </div>
 
+      <!-- Aerospace Consensus Decision Card (Atomic Commit / Rollback) -->
+      <div id="consensusCard" style="background:rgba(11,18,30,0.96); border:1px solid #1e3a5f; border-left:4px solid #e5a93b; border-radius:8px; padding:10px 14px; margin-bottom:10px; box-shadow:0 4px 20px rgba(0,0,0,0.5);">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span id="consensusBadge" style="background:rgba(229,169,59,0.2); color:#e5a93b; border:1px solid #e5a93b; font-size:10px; font-weight:800; padding:2px 8px; border-radius:4px; letter-spacing:0.5px;">
+            ⚠️ HARNESS CLASH: WIRE LINE 04
+          </span>
+          <span id="consensusTolerance" style="font-size:9px; color:#7ab0d6; font-family:monospace;">CLEARANCE: +3.20mm • TOLERANCE: ±0.05mm</span>
+        </div>
+        <div id="consensusPrompt" style="margin:8px 0; font-size:11px; color:#cbd5e1; line-height:1.4;">
+          Proposed Re-Route: Telemetry Ignition Bus 04 shifted to safe quadrant. Review holographic ghost and commit or rollback.
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button id="btnAgree" onclick="handleAgreeAction()" style="flex:1; background:linear-gradient(135deg, #00ff88 0%, #00e5ff 100%); color:#040912; border:none; border-radius:5px; font-weight:800; font-size:11px; padding:8px 12px; cursor:pointer; box-shadow:0 0 10px rgba(0,255,136,0.3);">
+            ✓ AGREE (Commit to Engine)
+          </button>
+          <button id="btnDisagree" onclick="handleDisagreeAction()" style="flex:1; background:rgba(239,68,68,0.18); color:#f87171; border:1px solid #ef4444; border-radius:5px; font-weight:bold; font-size:11px; padding:8px 12px; cursor:pointer;">
+            ✕ DISAGREE (Rollback)
+          </button>
+          <button id="btnPropose" onclick="callAction('reroute')" style="background:rgba(0,240,255,0.18); color:#00f0ff; border:1px solid #00f0ff; border-radius:5px; font-weight:bold; font-size:10px; padding:8px 12px; cursor:pointer;">
+            ⚡ Propose Ghost
+          </button>
+        </div>
+      </div>
+
+      <!-- Web-Blender / Universal CAD File Loader & Outliner -->
+      <div id="cadWorkspaceDeck" style="background:rgba(8,14,24,0.92); border:1px solid #1e293b; border-radius:8px; padding:10px 14px; margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="font-size:11px; font-weight:800; color:#00f0ff; letter-spacing:0.8px;">🛠️ WEB-BLENDER / CAD INSPECTOR</span>
+            <span style="font-size:8px; background:rgba(0,240,255,0.15); color:#00f0ff; padding:2px 6px; border-radius:3px; font-family:monospace;">AERO-CAD V2.4</span>
+          </div>
+          <label for="cadFileInput" style="background:#1e3a5f; color:#00f0ff; font-size:9px; font-weight:bold; padding:4px 9px; border-radius:4px; cursor:pointer; border:1px solid #00f0ff;">
+            📂 Load Any 3D CAD (.glb/.obj)
+          </label>
+          <input type="file" id="cadFileInput" accept=".glb,.gltf,.obj,.stl" style="display:none;" onchange="handleCadFileUpload(event)" />
+        </div>
+        
+        <!-- Drag & Drop Zone / Status -->
+        <div id="cadDropZone" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleFileDrop(event)" style="border:1px dashed #334155; border-radius:6px; padding:8px; text-align:center; font-size:10px; color:#94a3b8; background:rgba(15,23,42,0.6); margin-bottom:8px; transition:all 0.2s ease;">
+          <span id="cadFileName">🚀 Active Model: SpaceX/NASA Ion Thruster • Drag & Drop any custom 3D CAD file here</span>
+        </div>
+
+        <!-- Model Hierarchy Outliner -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:9px; font-family:monospace;">
+          <div style="background:rgba(15,23,42,0.8); padding:5px 8px; border-radius:4px; border-left:3px solid #00f0ff; color:#cbd5e1;">
+            ⛊ Shroud: Titanium Shell [±0.50mm]
+          </div>
+          <div id="outlinerWire" style="background:rgba(15,23,42,0.8); padding:5px 8px; border-radius:4px; border-left:3px solid #e5a93b; color:#e5a93b;">
+            ⚡ Wire 04: Chafing Clash [⚠️ RE-ROUTE]
+          </div>
+          <div style="background:rgba(15,23,42,0.8); padding:5px 8px; border-radius:4px; border-left:3px solid #38bdf8; color:#cbd5e1;">
+            ⚙ Impeller: Turbo-Pump [15 RPM]
+          </div>
+          <div style="background:rgba(15,23,42,0.8); padding:5px 8px; border-radius:4px; border-left:3px solid #a855f7; color:#cbd5e1;">
+            🎯 Injector: Fuel Nozzle [±0.05mm]
+          </div>
+        </div>
+      </div>
+
       <!-- Mode Switch Tabs -->
       <div class="mode-tabs">
         <button class="mode-tab active" id="tabWalk" onclick="switchMode('walk')">🕹️ WALK IN 3D</button>
@@ -769,7 +828,7 @@
 
       <!-- Collaborative Action Deck -->
       <div class="btn-grid">
-        <button class="btn btn-peel" onclick="callAction('peel')">✨ Peel to 3D VR</button>
+        <button class="btn btn-peel" onclick="callAction('room')">🌌 Reality-Peel: Cleanroom Portal</button>
         <button class="btn btn-explode" onclick="callAction('explode')">💥 Explode View</button>
         <button class="btn btn-xray" onclick="callAction('xray')">👁️ Toggle X-Ray</button>
         <button class="btn btn-theme" onclick="callAction('theme')">🎨 Switch Theme</button>
@@ -1896,6 +1955,105 @@
     }
 
     showControllerToast("ACTION TRIGGERED: " + act.toUpperCase());
+  }
+
+  // 11. Aerospace Wire-Harness Consensus Protocol (AGREE / DISAGREE)
+  function handleAgreeAction() {
+    callAction('agree');
+    const badge = document.getElementById('consensusBadge');
+    const prompt = document.getElementById('consensusPrompt');
+    const card = document.getElementById('consensusCard');
+    const outWire = document.getElementById('outlinerWire');
+
+    if (badge) {
+      badge.innerText = '✅ CONSENSUS COMMITTED: WIRE RE-ROUTE LOCKED (0 ERROR)';
+      badge.style.background = 'rgba(0,255,136,0.2)';
+      badge.style.color = '#00ff88';
+      badge.style.borderColor = '#00ff88';
+    }
+    if (card) {
+      card.style.borderLeftColor = '#00ff88';
+    }
+    if (prompt) {
+      prompt.innerHTML = 'Harness Line 04 successfully locked into nominal safe quadrant. Collision cleared. <strong>Plasma thrusters online!</strong>';
+    }
+    if (outWire) {
+      outWire.innerHTML = '⚡ Wire 04: Locked & Verified [✅ 0 ERROR]';
+      outWire.style.color = '#00ff88';
+      outWire.style.borderLeftColor = '#00ff88';
+    }
+    showControllerToast("✅ [AGREE] WIRE HARNESS COMMITTED TO ENGINE");
+  }
+
+  function handleDisagreeAction() {
+    callAction('disagree');
+    const badge = document.getElementById('consensusBadge');
+    const prompt = document.getElementById('consensusPrompt');
+    const card = document.getElementById('consensusCard');
+
+    if (badge) {
+      badge.innerText = '✕ PROPOSAL REJECTED (REVERTED TO BASELINE)';
+      badge.style.background = 'rgba(239,68,68,0.2)';
+      badge.style.color = '#f87171';
+      badge.style.borderColor = '#ef4444';
+    }
+    if (card) {
+      card.style.borderLeftColor = '#ef4444';
+    }
+    if (prompt) {
+      prompt.innerHTML = 'Proposed re-route cancelled. Wire harness reverted safely to baseline state.';
+    }
+    showControllerToast("✕ [DISAGREE] PROPOSAL REJECTED: REVERTED");
+  }
+
+  // 12. Drag & Drop Custom 3D CAD File Loader
+  function handleDragOver(e) {
+    e.preventDefault();
+    const zone = document.getElementById('cadDropZone');
+    if (zone) {
+      zone.style.borderColor = '#00f0ff';
+      zone.style.background = 'rgba(0,240,255,0.15)';
+    }
+  }
+
+  function handleDragLeave(e) {
+    const zone = document.getElementById('cadDropZone');
+    if (zone) {
+      zone.style.borderColor = '#334155';
+      zone.style.background = 'rgba(15,23,42,0.6)';
+    }
+  }
+
+  function handleFileDrop(e) {
+    e.preventDefault();
+    handleDragLeave(e);
+    if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+      processCadFile(e.dataTransfer.files[0]);
+    }
+  }
+
+  function handleCadFileUpload(e) {
+    if (e.target && e.target.files.length > 0) {
+      processCadFile(e.target.files[0]);
+    }
+  }
+
+  function processCadFile(file) {
+    if (!file) return;
+    const nameSpan = document.getElementById('cadFileName');
+    const sizeKb = (file.size / 1024).toFixed(1);
+    if (nameSpan) {
+      nameSpan.innerHTML = `📂 <strong>Custom CAD Loaded:</strong> ${file.name} (${sizeKb} KB) &bull; Epistemic Funneling & Consensus Active!`;
+      nameSpan.style.color = '#00f0ff';
+    }
+    SpatialAudio.playPing();
+    showControllerToast("📂 LOADED CUSTOM 3D CAD: " + file.name.toUpperCase());
+
+    // Dispatch to embedded 3D WebGL engine
+    const iframe = document.getElementById('liveWebglFrame');
+    if (iframe && iframe.contentWindow) {
+      iframe.contentWindow.postMessage({ type: 'load_model', fileName: file.name }, '*');
+    }
   }
 
   // Initialize Global Cloud Tracker and initial Metaverse linkage

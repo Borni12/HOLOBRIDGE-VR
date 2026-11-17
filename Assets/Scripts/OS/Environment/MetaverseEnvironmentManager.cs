@@ -343,6 +343,18 @@ namespace OmniOS.Environment
             ApplyTheme((EnvironmentTheme)next);
         }
 
+        public void ToggleCleanRoom()
+        {
+            if (currentTheme == EnvironmentTheme.QuantumCleanroom)
+            {
+                ApplyTheme(EnvironmentTheme.CyberHangar);
+            }
+            else
+            {
+                ApplyTheme(EnvironmentTheme.QuantumCleanroom);
+            }
+        }
+
         public void ApplyTheme(EnvironmentTheme theme)
         {
             currentTheme = theme;

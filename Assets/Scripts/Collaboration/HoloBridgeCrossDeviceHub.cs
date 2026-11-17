@@ -2152,7 +2152,10 @@ namespace HoloBridge.Collaboration
                                 if (kv.Length == 2 && kv[0] == "type")
                                 {
                                     string act = kv[1];
-                                    if (act == "peel") EnqueueMainThread(() => TriggerScreenPeel());
+                                    if (act == "peel" || act == "room") EnqueueMainThread(() => MetaverseEnvironmentManager.Instance?.ToggleCleanRoom());
+                                    else if (act == "agree") EnqueueMainThread(() => SharedDigitalTwinAssembly.Instance?.CommitProposal());
+                                    else if (act == "disagree") EnqueueMainThread(() => SharedDigitalTwinAssembly.Instance?.RejectProposal());
+                                    else if (act == "reroute") EnqueueMainThread(() => SharedDigitalTwinAssembly.Instance?.ProposeWireReroute());
                                     else if (act == "explode") EnqueueMainThread(() => SharedDigitalTwinAssembly.Instance?.ToggleExplodedView());
                                     else if (act == "xray") EnqueueMainThread(() => SharedDigitalTwinAssembly.Instance?.ToggleXRay());
                                     else if (act == "theme") EnqueueMainThread(() => MetaverseEnvironmentManager.Instance?.NextTheme());
@@ -2209,7 +2212,10 @@ namespace HoloBridge.Collaboration
             }
 
             int total = vr + pc + mob;
-            return $"{{\"count\":{total},\"vr\":{vr},\"pc\":{pc},\"mobile\":{mob},\"activeView\":\"{EscapeJson(streamTargetUserId)}\",\"users\":[{sb}]}}";
+            bool hasCol = SharedDigitalTwinAssembly.Instance?.HasCableCollision ?? true;
+            bool propAct = SharedDigitalTwinAssembly.Instance?.IsProposalActive ?? false;
+            bool propCom = SharedDigitalTwinAssembly.Instance?.IsProposalCommitted ?? false;
+            return $"{{\"count\":{total},\"vr\":{vr},\"pc\":{pc},\"mobile\":{mob},\"activeView\":\"{EscapeJson(streamTargetUserId)}\",\"hasCollision\":{(hasCol ? "true" : "false")},\"proposalActive\":{(propAct ? "true" : "false")},\"proposalCommitted\":{(propCom ? "true" : "false")},\"users\":[{sb}]}}";
         }
 
         private static string EscapeJson(string s)

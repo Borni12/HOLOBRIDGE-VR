@@ -27,7 +27,9 @@ namespace HoloBridge.Collaboration
             IntakeFan = 1,
             DriveShaft = 2,
             InternalBearing = 3,
-            CombustionNozzle = 4
+            CombustionNozzle = 4,
+            WiringHarness = 5,
+            GhostWiringProxy = 6
         }
 
         [System.Serializable]
@@ -85,6 +87,71 @@ namespace HoloBridge.Collaboration
         public void ToggleXRay()
         {
             IsXRayMode = !isXRayMode;
+        }
+
+        [Header("Aerospace Wire-Harness & Consensus State")]
+        [SerializeField] private bool hasCableCollision = true;
+        [SerializeField] private bool isProposalActive = false;
+        [SerializeField] private bool isProposalCommitted = false;
+
+        public bool HasCableCollision => hasCableCollision;
+        public bool IsProposalActive => isProposalActive;
+        public bool IsProposalCommitted => isProposalCommitted;
+
+        public void ProposeWireReroute()
+        {
+            isProposalActive = true;
+            isProposalCommitted = false;
+            var ghost = GetPart(ComponentType.GhostWiringProxy);
+            if (ghost != null && ghost.gameObject != null)
+            {
+                ghost.gameObject.SetActive(true);
+            }
+            UpdateMaterials();
+            OmniOSManager.Instance?.ShowNotificationToast("⚡ PROPOSED WIRE RE-ROUTE ACTIVE (+3.2mm Clearance)");
+            SpatialAudioEngine.Instance?.PlayThemeChime();
+        }
+
+        public bool CommitProposal()
+        {
+            hasCableCollision = false;
+            isProposalActive = false;
+            isProposalCommitted = true;
+
+            var ghost = GetPart(ComponentType.GhostWiringProxy);
+            if (ghost != null && ghost.gameObject != null)
+            {
+                ghost.gameObject.SetActive(false);
+            }
+
+            var wire = GetPart(ComponentType.WiringHarness);
+            if (wire != null && wire.gameObject != null)
+            {
+                wire.nominalLocalPos = new Vector3(0.04f, 0.03f, 0.12f);
+                UpdatePartPositions();
+            }
+
+            UpdateMaterials();
+            OmniOSManager.Instance?.ShowNotificationToast("✅ [AGREE] CONSENSUS COMMITTED: WIRE RE-ROUTE LOCKED!");
+            SpatialAudioEngine.Instance?.PlayPositivePing();
+            return true;
+        }
+
+        public bool RejectProposal()
+        {
+            isProposalActive = false;
+            isProposalCommitted = false;
+
+            var ghost = GetPart(ComponentType.GhostWiringProxy);
+            if (ghost != null && ghost.gameObject != null)
+            {
+                ghost.gameObject.SetActive(false);
+            }
+
+            UpdateMaterials();
+            OmniOSManager.Instance?.ShowNotificationToast("✕ [DISAGREE] PROPOSAL REJECTED: REVERTED TO BASELINE");
+            SpatialAudioEngine.Instance?.PlayNegativeBuzz();
+            return true;
         }
 
         private static SharedDigitalTwinAssembly instance;
@@ -167,6 +234,12 @@ namespace HoloBridge.Collaboration
 
             // 5. Layer 4: Annular Combustion Nozzle Manifold
             CreateCombustionNozzle(litShader);
+
+            // 6. Layer 5: Telemetry Wiring Harness Bus 04 (⚠️ Chafing Hazard & Cable Clash)
+            CreateWiringHarness(litShader);
+
+            // 7. Layer 6: Holographic Safe Re-Route Ghost Proxy (+3.2mm Clearance)
+            CreateGhostWiringProxy(litShader);
 
             UpdatePartPositions();
             UpdateMaterials();
@@ -408,6 +481,98 @@ namespace HoloBridge.Collaboration
             });
         }
 
+        private void CreateWiringHarness(Shader litShader)
+        {
+            GameObject harnessRoot = new GameObject("Part_WiringHarness_Bus04");
+            harnessRoot.transform.SetParent(assemblyRoot, false);
+            harnessRoot.transform.localPosition = new Vector3(0, 0, 0.12f);
+
+            for (int i = 0; i < 4; i++)
+            {
+                float angle = i * 45f + 15f;
+                GameObject wire = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                wire.name = $"HarnessCable_{i + 1}";
+                wire.transform.SetParent(harnessRoot, false);
+                wire.transform.localScale = new Vector3(0.022f, 0.28f, 0.022f);
+                wire.transform.localPosition = Quaternion.Euler(0, 0, angle) * new Vector3(0.24f, 0, 0);
+                wire.transform.localRotation = Quaternion.Euler(90f, 0, angle);
+
+                var wireMat = new Material(litShader);
+                if (i == 3)
+                {
+                    wireMat.color = new Color(1.0f, 0.35f, 0.05f);
+                    if (wireMat.HasProperty("_EmissionColor"))
+                    {
+                        wireMat.EnableKeyword("_EMISSION");
+                        wireMat.SetColor("_EmissionColor", new Color(1.0f, 0.2f, 0.0f) * 1.6f);
+                    }
+                }
+                else
+                {
+                    wireMat.color = new Color(0.12f, 0.16f, 0.22f);
+                }
+                wire.GetComponent<Renderer>().material = wireMat;
+            }
+
+            var col = harnessRoot.AddComponent<BoxCollider>();
+            col.size = new Vector3(0.55f, 0.55f, 0.35f);
+
+            var defaultMat = new Material(litShader);
+            defaultMat.color = new Color(1.0f, 0.35f, 0.05f);
+
+            parts.Add(new AssemblyPart
+            {
+                partId = "WIRE_HARNESS_BUS04",
+                displayName = "Ignition Wire Harness Bus 04 (⚠️ Chafing Hazard)",
+                componentType = ComponentType.WiringHarness,
+                gameObject = harnessRoot,
+                renderer = harnessRoot.transform.GetChild(3).GetComponent<Renderer>(),
+                defaultMaterial = defaultMat,
+                xRayMaterial = defaultMat,
+                nominalLocalPos = new Vector3(0, 0, 0.12f),
+                nominalLocalRot = Quaternion.identity,
+                explodedOffset = new Vector3(0.25f, 0, 0.12f),
+                toleranceSpec = "±0.02 mm"
+            });
+        }
+
+        private void CreateGhostWiringProxy(Shader litShader)
+        {
+            GameObject ghostRoot = new GameObject("Part_GhostWiringProxy");
+            ghostRoot.transform.SetParent(assemblyRoot, false);
+            ghostRoot.transform.localPosition = new Vector3(0.04f, 0.03f, 0.12f);
+
+            GameObject ghostTube = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            ghostTube.name = "GhostWire_SafePath";
+            ghostTube.transform.SetParent(ghostRoot, false);
+            ghostTube.transform.localScale = new Vector3(0.026f, 0.29f, 0.026f);
+            ghostTube.transform.localPosition = Quaternion.Euler(0, 0, 150f) * new Vector3(0.28f, 0, 0);
+            ghostTube.transform.localRotation = Quaternion.Euler(90f, 0, 150f);
+
+            var ghostMat = SpatialTheme.CreateGlassMaterial(
+                new Color(0.0f, 0.95f, 0.65f, 0.45f),
+                new Color(0.0f, 1.0f, 0.6f, 0.9f)
+            );
+            ghostTube.GetComponent<Renderer>().material = ghostMat;
+
+            ghostRoot.SetActive(false);
+
+            parts.Add(new AssemblyPart
+            {
+                partId = "GHOST_WIRE_PROXY",
+                displayName = "Holographic Re-Route Ghost (+3.2mm Clearance)",
+                componentType = ComponentType.GhostWiringProxy,
+                gameObject = ghostRoot,
+                renderer = ghostTube.GetComponent<Renderer>(),
+                defaultMaterial = ghostMat,
+                xRayMaterial = ghostMat,
+                nominalLocalPos = new Vector3(0.04f, 0.03f, 0.12f),
+                nominalLocalRot = Quaternion.identity,
+                explodedOffset = new Vector3(0.25f, 0, 0.12f),
+                toleranceSpec = "Clearance: +3.20 mm"
+            });
+        }
+
         public void UpdatePartPositions()
         {
             foreach (var part in parts)
@@ -431,6 +596,21 @@ namespace HoloBridge.Collaboration
                 else if (part.isSelected)
                 {
                     part.renderer.material = highlightMatCyan;
+                }
+                else if (part.componentType == ComponentType.WiringHarness)
+                {
+                    if (isProposalCommitted)
+                    {
+                        part.renderer.material = highlightMatCyan;
+                    }
+                    else if (hasCableCollision)
+                    {
+                        part.renderer.material = highlightMatAmber;
+                    }
+                    else
+                    {
+                        part.renderer.material = part.defaultMaterial;
+                    }
                 }
                 else
                 {
