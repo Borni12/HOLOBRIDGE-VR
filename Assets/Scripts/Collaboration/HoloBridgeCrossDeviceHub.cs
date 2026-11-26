@@ -2153,9 +2153,12 @@ namespace HoloBridge.Collaboration
                                 {
                                     string act = kv[1];
                                     if (act == "peel" || act == "room") EnqueueMainThread(() => MetaverseEnvironmentManager.Instance?.ToggleCleanRoom());
-                                    else if (act == "room_hangar" || act == "hangar") EnqueueMainThread(() => MetaverseEnvironmentManager.Instance?.ApplyTheme(MetaverseEnvironmentManager.EnvironmentTheme.CyberHangar));
+                                    else if (act == "room_observatory" || act == "observatory") EnqueueMainThread(() => MetaverseEnvironmentManager.Instance?.ApplyTheme(MetaverseEnvironmentManager.EnvironmentTheme.XPISpatialObservatory));
+                                    else if (act == "room_launchpad" || act == "room_hangar" || act == "hangar") EnqueueMainThread(() => MetaverseEnvironmentManager.Instance?.ApplyTheme(MetaverseEnvironmentManager.EnvironmentTheme.RocketLaunchpad));
+                                    else if (act == "room_cupola" || act == "room_orbital" || act == "cupola") EnqueueMainThread(() => MetaverseEnvironmentManager.Instance?.ApplyTheme(MetaverseEnvironmentManager.EnvironmentTheme.OrbitalCupola));
                                     else if (act == "room_cleanroom" || act == "cleanroom") EnqueueMainThread(() => MetaverseEnvironmentManager.Instance?.ApplyTheme(MetaverseEnvironmentManager.EnvironmentTheme.QuantumCleanroom));
-                                    else if (act == "room_orbital" || act == "room_mars" || act == "mars") EnqueueMainThread(() => MetaverseEnvironmentManager.Instance?.ApplyTheme(MetaverseEnvironmentManager.EnvironmentTheme.OrbitalDeck));
+                                    else if (act == "room_mars" || act == "mars") EnqueueMainThread(() => MetaverseEnvironmentManager.Instance?.ApplyTheme(MetaverseEnvironmentManager.EnvironmentTheme.MarsColonyBay));
+                                    else if (act == "room_default" || act == "default") EnqueueMainThread(() => MetaverseEnvironmentManager.Instance?.ApplyTheme(MetaverseEnvironmentManager.EnvironmentTheme.DefaultTemplate));
                                     else if (act == "preset_raptor" || act == "preset_0" || act == "raptor") EnqueueMainThread(() => SharedDigitalTwinAssembly.Instance?.SetModelPreset(0));
                                     else if (act == "preset_ion" || act == "preset_1" || act == "ion") EnqueueMainThread(() => SharedDigitalTwinAssembly.Instance?.SetModelPreset(1));
                                     else if (act == "preset_turbopump" || act == "preset_2" || act == "turbopump") EnqueueMainThread(() => SharedDigitalTwinAssembly.Instance?.SetModelPreset(2));

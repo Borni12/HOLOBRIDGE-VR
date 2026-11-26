@@ -836,16 +836,19 @@
         <div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; align-items:center;">
           <span style="font-size:10px; font-weight:bold; color:#cbd5e1; margin-right:4px;">🏛️ Room Setting:</span>
           <button id="btnRoomObservatory" class="cad-room-btn active" onclick="switchRoomTheme('observatory')">
-            🔭 XPI Observatory (New Default)
+            🔭 XPI Observatory (Default)
           </button>
-          <button id="btnRoomHangar" class="cad-room-btn" onclick="switchRoomTheme('hangar')">
-            🌌 Room 1: CyberHangar (Dark Obsidian Deck)
+          <button id="btnRoomLaunchpad" class="cad-room-btn" onclick="switchRoomTheme('launchpad')">
+            🚀 Rocket Launchpad
+          </button>
+          <button id="btnRoomCupola" class="cad-room-btn" onclick="switchRoomTheme('cupola')">
+            🛰️ Orbital Cupola
           </button>
           <button id="btnRoomCleanroom" class="cad-room-btn" onclick="switchRoomTheme('cleanroom')">
-            ⚪ Room 2: NASA Cleanroom (Ultra-White Diffuse Lab)
+            🔬 Quantum Cleanroom
           </button>
           <button id="btnRoomMars" class="cad-room-btn" onclick="switchRoomTheme('mars')">
-            🪐 Room 3: Mars Outpost Bay (Solar Horizon)
+            🪐 Mars Colony Dome
           </button>
         </div>
 
@@ -2248,6 +2251,18 @@
       cadDirLight.color.setHex(0xffffff);
       cadDirLight.intensity = 1.8;
       cadSecondaryLight.color.setHex(0xdbeafe);
+    } else if (roomKey === 'cupola') {
+      bgColor = 0x020612;
+      floorColor = 0x161b24;
+      gridColor1 = 0x38bdf8;
+      gridColor2 = 0x1e293b;
+      lightColor = 0x38bdf8;
+      ambientIntensity = 1.5;
+      cadAmbientLight.color.setHex(0x101c30);
+      cadAmbientLight.intensity = ambientIntensity;
+      cadDirLight.color.setHex(0xe0f2fe);
+      cadDirLight.intensity = 1.8;
+      cadSecondaryLight.color.setHex(0xf59e0b);
     } else if (roomKey === 'mars') {
       bgColor = 0x180b08;
       floorColor = 0x3b140d;
@@ -2303,20 +2318,78 @@
     ringMesh.position.y = 0.18;
     cadPedestalGroup.add(ringMesh);
 
-    // Perimeter Accent Columns
-    for (let i = 0; i < 6; i++) {
-      const angle = (i / 6) * Math.PI * 2;
-      const colGeo = new THREE.BoxGeometry(0.12, 3.2, 0.12);
-      const colMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8 });
-      const colMesh = new THREE.Mesh(colGeo, colMat);
-      colMesh.position.set(Math.sin(angle) * 3.8, 1.6, Math.cos(angle) * 3.8);
-      cadRoomGroup.add(colMesh);
-
-      const stripGeo = new THREE.BoxGeometry(0.04, 3.0, 0.04);
-      const stripMat = new THREE.MeshStandardMaterial({ color: lightColor, emissive: lightColor, emissiveIntensity: 0.85 });
-      const stripMesh = new THREE.Mesh(stripGeo, stripMat);
-      stripMesh.position.set(Math.sin(angle) * 3.74, 1.6, Math.cos(angle) * 3.74);
-      cadRoomGroup.add(stripMesh);
+    // Distinct 3D Architectural Environment per Room (Never identical!)
+    if (roomKey === 'launchpad' || roomKey === 'hangar') {
+      // SpaceX Steel Gantry Tower + Cryo Spheres
+      const towerMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.85, roughness: 0.3 });
+      const tower = new THREE.Mesh(new THREE.BoxGeometry(0.65, 3.8, 0.65), towerMat);
+      tower.position.set(-2.6, 1.9, -2.0);
+      cadRoomGroup.add(tower);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.14, 0.2), new THREE.MeshStandardMaterial({ color: 0xf59e0b }));
+      arm.position.set(-1.6, 2.5, -1.6);
+      arm.rotation.y = -0.35;
+      cadRoomGroup.add(arm);
+      for (let t = 0; t < 2; t++) {
+        const tank = new THREE.Mesh(new THREE.SphereGeometry(0.55, 24, 24), new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.4, roughness: 0.2 }));
+        tank.position.set(2.4 + t * 1.1, 0.55, -2.4);
+        cadRoomGroup.add(tank);
+      }
+    } else if (roomKey === 'cupola') {
+      // ISS Cupola Window Struts + Giant Earth Sphere outside
+      const earth = new THREE.Mesh(
+        new THREE.SphereGeometry(4.5, 32, 32),
+        new THREE.MeshStandardMaterial({ color: 0x0ea5e9, roughness: 0.6, metalness: 0.1 })
+      );
+      earth.position.set(0, -3.2, -7.2);
+      cadRoomGroup.add(earth);
+      for (let w = 0; w < 5; w++) {
+        const a = -0.9 + w * 0.45;
+        const strut = new THREE.Mesh(new THREE.BoxGeometry(0.10, 2.8, 0.14), new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.85 }));
+        strut.position.set(Math.sin(a) * 3.2, 1.4, -Math.cos(a) * 3.2);
+        strut.rotation.x = 0.25;
+        cadRoomGroup.add(strut);
+      }
+    } else if (roomKey === 'cleanroom') {
+      // Glass Partition Walls + Orange Robotic Assembly Arms
+      const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.22, roughness: 0.1 });
+      for (let s = -1; s <= 1; s += 2) {
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.6, 5.2), glassMat);
+        wall.position.set(s * 3.1, 1.3, 0);
+        cadRoomGroup.add(wall);
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.4, 0.18), new THREE.MeshStandardMaterial({ color: 0xf97316 }));
+        arm.position.set(s * 1.9, 0.7, -1.0);
+        arm.rotation.z = s * 0.25;
+        cadRoomGroup.add(arm);
+      }
+    } else if (roomKey === 'mars') {
+      // Geodesic Dome Ribs + Red Martian Rocks
+      const ribMat = new THREE.MeshStandardMaterial({ color: 0x44403c, metalness: 0.7 });
+      for (let r = 0; r < 4; r++) {
+        const rib = new THREE.Mesh(new THREE.TorusGeometry(3.8, 0.05, 8, 48, Math.PI), ribMat);
+        rib.rotation.y = (r / 4) * Math.PI;
+        cadRoomGroup.add(rib);
+      }
+      const rockMat = new THREE.MeshStandardMaterial({ color: 0x9a3412, roughness: 0.9 });
+      for (let k = 0; k < 8; k++) {
+        const ang = (k / 8) * Math.PI * 2;
+        const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.45, 0), rockMat);
+        rock.position.set(Math.sin(ang) * 3.9, 0.2, Math.cos(ang) * 3.9);
+        cadRoomGroup.add(rock);
+      }
+    } else {
+      // XPI Observatory: 4 Cantilever Pillars + Overhead Gyro Halo Ring
+      const archMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.85 });
+      for (let i = 0; i < 4; i++) {
+        const angle = Math.PI / 4 + (i / 4) * Math.PI * 2;
+        const colMesh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 3.0, 0.20), archMat);
+        colMesh.position.set(Math.sin(angle) * 3.3, 1.5, Math.cos(angle) * 3.3);
+        colMesh.rotation.y = angle;
+        cadRoomGroup.add(colMesh);
+      }
+      const gyro = new THREE.Mesh(new THREE.TorusGeometry(2.1, 0.04, 12, 64), new THREE.MeshStandardMaterial({ color: 0x00f5d4, emissive: 0x00f5d4, emissiveIntensity: 0.8 }));
+      gyro.rotation.x = Math.PI / 2;
+      gyro.position.y = 2.8;
+      cadRoomGroup.add(gyro);
     }
   }
 
@@ -2615,16 +2688,19 @@
     activeCadRoomKey = roomKey;
     document.querySelectorAll('.cad-room-btn').forEach(b => b.classList.remove('active'));
     if (roomKey === 'observatory') document.getElementById('btnRoomObservatory')?.classList.add('active');
-    else if (roomKey === 'hangar') document.getElementById('btnRoomHangar')?.classList.add('active');
+    else if (roomKey === 'launchpad' || roomKey === 'hangar') document.getElementById('btnRoomLaunchpad')?.classList.add('active');
+    else if (roomKey === 'cupola') document.getElementById('btnRoomCupola')?.classList.add('active');
     else if (roomKey === 'cleanroom') document.getElementById('btnRoomCleanroom')?.classList.add('active');
     else if (roomKey === 'mars') document.getElementById('btnRoomMars')?.classList.add('active');
 
     const roomBadge = document.getElementById('cadRoomBadge');
     if (roomBadge) {
       if (roomKey === 'observatory') roomBadge.innerText = '🔭 XPI Observatory';
-      else if (roomKey === 'cleanroom') roomBadge.innerText = '⚪ Quantum Cleanroom';
-      else if (roomKey === 'mars') roomBadge.innerText = '🪐 Mars Outpost Bay';
-      else roomBadge.innerText = '🌌 CyberHangar';
+      else if (roomKey === 'launchpad' || roomKey === 'hangar') roomBadge.innerText = '🚀 Rocket Launchpad';
+      else if (roomKey === 'cupola') roomBadge.innerText = '🛰️ Orbital Cupola';
+      else if (roomKey === 'cleanroom') roomBadge.innerText = '🔬 Quantum Cleanroom';
+      else if (roomKey === 'mars') roomBadge.innerText = '🪐 Mars Colony Dome';
+      else roomBadge.innerText = '🔭 XPI Observatory';
     }
 
     buildCadRoom(roomKey);
