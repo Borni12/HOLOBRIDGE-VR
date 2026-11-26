@@ -230,7 +230,7 @@ MonoBehaviour:
   depthRelief: 0.45
   exposure: 1.05
   domeRadius: 24
-  userHeadTransform: {fileID: 2066046165}
+  userHeadTransform: {fileID: 147816320}
 --- !u!82 &4753887
 AudioSource:
   m_ObjectHideFlags: 0
@@ -392,7 +392,7 @@ MonoBehaviour:
   dockDistance: 1.25
   dockHeightOffset: -0.22
   followDamping: 4.5
-  headCamera: {fileID: 2066046165}
+  headCamera: {fileID: 147816320}
   osManager: {fileID: 4753894}
 --- !u!114 &4753891
 MonoBehaviour:
@@ -407,7 +407,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::OmniOS.Interaction.SpatialPointer
   rightHandTransform: {fileID: 1096090914}
-  headCameraTransform: {fileID: 2066046165}
+  headCameraTransform: {fileID: 147816320}
   maxRayDistance: 10
   interactionLayers:
     serializedVersion: 2
@@ -440,7 +440,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98110d8cfddc94b429deb3067c036919, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::OmniGenesis.Core.OmniGenesis5DExperience
-  headCamera: {fileID: 2066046165}
+  headCamera: {fileID: 147816320}
   pointer: {fileID: 4753891}
   currentStiffness: 2
 --- !u!114 &4753894
@@ -455,7 +455,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5dc8a5deb4163b84b8c4b4f138c34208, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::OmniOS.Core.OmniOSManager
-  userHead: {fileID: 2066046165}
+  userHead: {fileID: 147816320}
   spatialDock: {fileID: 4753890}
   spatialPointer: {fileID: 4753891}
   videoRealityManager: {fileID: 4753886}
@@ -15378,11 +15378,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2064529225}
   m_CullTransparentMesh: 0
---- !u!4 &2066046165 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 7277802327414017193, guid: 77e7c27b2c5525e4aa8cc9f99d654486, type: 3}
-  m_PrefabInstance: {fileID: 2779669268269126897}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &2078959960
 GameObject:
   m_ObjectHideFlags: 0
