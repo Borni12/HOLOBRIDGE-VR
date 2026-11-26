@@ -38,11 +38,12 @@ namespace OmniOS.Environment
             CyberHangar = 0,
             QuantumCleanroom = 1,
             OrbitalDeck = 2,
-            DefaultTemplate = 3
+            DefaultTemplate = 3,
+            XPISpatialObservatory = 4
         }
 
         [Header("Theme Configuration")]
-        [SerializeField] private EnvironmentTheme currentTheme = EnvironmentTheme.CyberHangar;
+        [SerializeField] private EnvironmentTheme currentTheme = EnvironmentTheme.XPISpatialObservatory;
         public EnvironmentTheme CurrentTheme => currentTheme;
 
         // Custom Architectural Room Visual Hierarchy
@@ -64,6 +65,11 @@ namespace OmniOS.Environment
 
         // Reference to Unity's default template room to toggle on/off
         private GameObject unityTemplateEnvironment;
+
+        // Brand-New VR Environment: TXST XPI Spatial Observatory Architecture
+        private GameObject observatoryDeckRoot;
+        private Transform orbitalGyroRing;
+        private Material observatoryAccentMaterial;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void AutoInitialize()
@@ -279,6 +285,120 @@ namespace OmniOS.Environment
             var shape = atmosphericParticles.shape;
             shape.shapeType = ParticleSystemShapeType.Box;
             shape.scale = new Vector3(14f, 3.2f, 14f);
+
+            // =========================================================================
+            // 5. BRAND-NEW VR ENVIRONMENT: TXST XPI SPATIAL OBSERVATORY ARCHITECTURE
+            // =========================================================================
+            BuildXPISpatialObservatoryArchitecture(litShader, unlitShader);
+        }
+
+        private void BuildXPISpatialObservatoryArchitecture(Shader litShader, Shader unlitShader)
+        {
+            if (observatoryDeckRoot != null) return;
+
+            observatoryDeckRoot = new GameObject("XPI_SpatialObservatory_Architecture");
+            observatoryDeckRoot.transform.SetParent(customRoomRoot.transform, false);
+
+            observatoryAccentMaterial = new Material(unlitShader);
+            observatoryAccentMaterial.color = new Color(0.0f, 0.95f, 0.85f, 1.0f);
+
+            var pillarMat = new Material(litShader);
+            pillarMat.color = new Color(0.09f, 0.13f, 0.20f, 1.0f);
+            if (pillarMat.HasProperty("_Metallic")) pillarMat.SetFloat("_Metallic", 0.88f);
+            if (pillarMat.HasProperty("_Smoothness")) pillarMat.SetFloat("_Smoothness", 0.78f);
+
+            // 1. Holographic Inspection Pedestal Ring under the Digital Twin at (0, 0, 1.85)
+            GameObject pedestal = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            pedestal.name = "Observatory_InspectionPedestal";
+            pedestal.transform.SetParent(observatoryDeckRoot.transform, false);
+            pedestal.transform.position = new Vector3(0f, 0.015f, 1.85f);
+            pedestal.transform.localScale = new Vector3(1.65f, 0.015f, 1.65f);
+            pedestal.GetComponent<Renderer>().material = pillarMat;
+            var pCol = pedestal.GetComponent<Collider>();
+            if (pCol != null) Destroy(pCol);
+
+            GameObject pedestalRim = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            pedestalRim.name = "Observatory_PedestalNeonRim";
+            pedestalRim.transform.SetParent(observatoryDeckRoot.transform, false);
+            pedestalRim.transform.position = new Vector3(0f, 0.008f, 1.85f);
+            pedestalRim.transform.localScale = new Vector3(1.78f, 0.008f, 1.78f);
+            var rimRenderer = pedestalRim.GetComponent<Renderer>();
+            rimRenderer.material = observatoryAccentMaterial;
+            rimRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            var rCol = pedestalRim.GetComponent<Collider>();
+            if (rCol != null) Destroy(rCol);
+
+            // 2. 4 Cantilever Arch Pillars curving over the workspace
+            for (int i = 0; i < 4; i++)
+            {
+                float angle = 45f + i * 90f;
+                float rad = angle * Mathf.Deg2Rad;
+                Vector3 basePos = new Vector3(Mathf.Sin(rad) * 5.2f, 2.2f, 1.85f + Mathf.Cos(rad) * 5.2f);
+
+                GameObject arch = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                arch.name = $"Observatory_CantileverArch_{i + 1}";
+                arch.transform.SetParent(observatoryDeckRoot.transform, false);
+                arch.transform.position = basePos;
+                arch.transform.rotation = Quaternion.Euler(22f, angle + 180f, 0f);
+                arch.transform.localScale = new Vector3(0.32f, 4.8f, 0.45f);
+                arch.GetComponent<Renderer>().material = pillarMat;
+
+                GameObject archTrim = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                archTrim.name = "Arch_HoloStrip";
+                archTrim.transform.SetParent(arch.transform, false);
+                archTrim.transform.localPosition = new Vector3(0f, 0f, -0.52f);
+                archTrim.transform.localScale = new Vector3(0.16f, 0.96f, 0.06f);
+                var atCol = archTrim.GetComponent<Collider>();
+                if (atCol != null) Destroy(atCol);
+                var atRend = archTrim.GetComponent<Renderer>();
+                atRend.material = observatoryAccentMaterial;
+                atRend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+
+            // 3. Spinning Overhead Orbital Gyro-Ring
+            GameObject gyroObj = new GameObject("Observatory_OrbitalGyroRing");
+            gyroObj.transform.SetParent(observatoryDeckRoot.transform, false);
+            gyroObj.transform.position = new Vector3(0f, 4.5f, 1.85f);
+            orbitalGyroRing = gyroObj.transform;
+
+            for (int s = 0; s < 12; s++)
+            {
+                float a = s * 30f;
+                GameObject seg = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                seg.name = $"GyroSeg_{s}";
+                seg.transform.SetParent(orbitalGyroRing, false);
+                seg.transform.localPosition = Quaternion.Euler(0f, a, 0f) * new Vector3(2.4f, 0f, 0f);
+                seg.transform.localRotation = Quaternion.Euler(0f, a, 0f);
+                seg.transform.localScale = new Vector3(0.12f, 0.10f, 0.95f);
+                var sCol = seg.GetComponent<Collider>();
+                if (sCol != null) Destroy(sCol);
+                var sRend = seg.GetComponent<Renderer>();
+                sRend.material = (s % 2 == 0) ? observatoryAccentMaterial : pillarMat;
+                sRend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+
+            // 4. TXST XPI Lab Spatial Telemetry Totems
+            for (int t = -1; t <= 1; t += 2)
+            {
+                GameObject totem = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                totem.name = $"XPI_TelemetryTotem_{(t < 0 ? "L" : "R")}";
+                totem.transform.SetParent(observatoryDeckRoot.transform, false);
+                totem.transform.position = new Vector3(t * 2.6f, 1.0f, 2.9f);
+                totem.transform.rotation = Quaternion.Euler(0f, t * -25f, 0f);
+                totem.transform.localScale = new Vector3(0.35f, 2.0f, 0.18f);
+                totem.GetComponent<Renderer>().material = pillarMat;
+
+                GameObject badge = new GameObject("Totem_Label");
+                badge.transform.SetParent(totem.transform, false);
+                badge.transform.localPosition = new Vector3(0f, 0.35f, -0.55f);
+                var tm = badge.AddComponent<TextMesh>();
+                tm.text = (t < 0) ? "TXST XPI LAB\nDIGITAL TWIN" : "IEEE VR 2027\nSPATIAL HUB";
+                tm.fontSize = 22;
+                tm.characterSize = 0.03f;
+                tm.anchor = TextAnchor.MiddleCenter;
+                tm.alignment = TextAlignment.Center;
+                tm.color = new Color(0.0f, 0.95f, 0.85f);
+            }
         }
 
         private Texture2D GenerateProceduralHexGridTexture()
@@ -335,11 +455,16 @@ namespace OmniOS.Environment
                     roomFloor.transform.position = new Vector3(pos.x, -0.015f, pos.z);
                 }
             }
+            // Gentle rotation of Orbital Gyroscope Ring in XPI Spatial Observatory
+            if (orbitalGyroRing != null && observatoryDeckRoot != null && observatoryDeckRoot.activeSelf)
+            {
+                orbitalGyroRing.Rotate(Vector3.up, 12f * Time.deltaTime, Space.Self);
+            }
         }
 
         public void NextTheme()
         {
-            int next = ((int)currentTheme + 1) % 4; // 4 Themes total!
+            int next = ((int)currentTheme + 1) % 5; // 5 Themes total!
             ApplyTheme((EnvironmentTheme)next);
         }
 
@@ -397,6 +522,7 @@ namespace OmniOS.Environment
             if (arrowsObj != null) arrowsObj.SetActive(false);
             if (torusObj != null) torusObj.SetActive(false);
             if (customRoomRoot != null) customRoomRoot.SetActive(true);
+            if (observatoryDeckRoot != null) observatoryDeckRoot.SetActive(theme == EnvironmentTheme.XPISpatialObservatory);
 
             Color floorColor;
             Color wallColor;
@@ -407,6 +533,15 @@ namespace OmniOS.Environment
 
             switch (theme)
             {
+                case EnvironmentTheme.XPISpatialObservatory:
+                    themeName = "🔭 TXST XPI SPATIAL OBSERVATORY (New Default VR Environment)";
+                    floorColor = new Color(0.03f, 0.06f, 0.11f, 1.0f);     // Deep Midnight Titanium
+                    wallColor = new Color(0.05f, 0.09f, 0.16f, 1.0f);      // Observatory Slate Bulkhead
+                    accentColor = new Color(0.0f, 0.95f, 0.85f, 1.0f);     // XPI Aurora Teal-Cyan
+                    ambientColor = new Color(0.14f, 0.20f, 0.30f, 1.0f);   // Crisp Starlight Ambient
+                    spotlightColor = new Color(0.75f, 0.98f, 1.0f, 1.0f);  // Cool Observatory Key
+                    break;
+
                 case EnvironmentTheme.QuantumCleanroom:
                     themeName = "🔬 QUANTUM CLEANROOM (Apple / NASA Minimalist White Lab)";
                     floorColor = new Color(0.92f, 0.94f, 0.97f, 1.0f);     // Pure pristine white porcelain

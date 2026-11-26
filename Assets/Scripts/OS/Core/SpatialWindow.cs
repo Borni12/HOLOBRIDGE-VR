@@ -95,7 +95,10 @@ namespace OmniOS.Core
             foreach (var c in backplateColliders) DestroyImmediate(c);
 
             Material glassMat = SpatialTheme.CreateGlassMaterial(SpatialTheme.GlassBase, SpatialTheme.GlassBorder);
-            backplate.GetComponent<Renderer>().material = glassMat;
+            var backplateRenderer = backplate.GetComponent<Renderer>();
+            backplateRenderer.material = glassMat;
+            backplateRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            backplateRenderer.receiveShadows = false;
 
             // 2. Header Bar
             HeaderBar = new GameObject("Window_HeaderBar");
@@ -176,14 +179,17 @@ namespace OmniOS.Core
         {
             IsMinimized = true;
             targetLocalScale = Vector3.one * 0.001f;
+            SetRenderersAndShadowsEnabled(false);
             SpatialTheme.PlaySpatialTone(transform.position, 600f, 0.06f);
             OnWindowMinimized?.Invoke();
+            gameObject.SetActive(false);
         }
 
         public void Restore()
         {
             IsMinimized = false;
             gameObject.SetActive(true);
+            SetRenderersAndShadowsEnabled(true);
             targetLocalScale = Vector3.one;
             SpatialTheme.PlaySpatialTone(transform.position, 950f, 0.06f);
             OnWindowRestored?.Invoke();
@@ -193,6 +199,7 @@ namespace OmniOS.Core
         {
             IsOpen = false;
             targetLocalScale = Vector3.zero;
+            SetRenderersAndShadowsEnabled(false);
             SpatialTheme.PlaySpatialTone(transform.position, 400f, 0.08f);
             OnWindowClosed?.Invoke();
             gameObject.SetActive(false);
@@ -203,9 +210,22 @@ namespace OmniOS.Core
             IsOpen = true;
             IsMinimized = false;
             gameObject.SetActive(true);
+            SetRenderersAndShadowsEnabled(true);
             transform.localScale = Vector3.one * 0.05f;
             targetLocalScale = Vector3.one;
             SpatialTheme.PlaySpatialTone(transform.position, 1100f, 0.08f);
+        }
+
+        private void SetRenderersAndShadowsEnabled(bool enabled)
+        {
+            foreach (var r in GetComponentsInChildren<Renderer>(true))
+            {
+                r.enabled = enabled;
+                if (r.gameObject.name.Contains("Backplate"))
+                {
+                    r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                }
+            }
         }
 
         public void SetDimensions(float width, float height)

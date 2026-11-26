@@ -2712,8 +2712,15 @@ namespace HoloBridge.Collaboration
             stylesReady = true;
         }
 
+        private bool isControlPanelOpen = true;
+
         private void OnGUI()
         {
+            if (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.C)
+            {
+                isControlPanelOpen = !isControlPanelOpen;
+                Event.current.Use();
+            }
             InitStyles();
 
             // 0. Top-Center Live Operators Banner (In-Game / In-Editor HUD)
@@ -2759,6 +2766,16 @@ namespace HoloBridge.Collaboration
 
             // 1. Top-Left Collaborative Participant HUD
             isLocalJoined = participants.ContainsKey("pc_local") || participants.ContainsKey("vr_local") || participants.ContainsKey("web_local");
+            if (!isControlPanelOpen)
+            {
+                if (GUI.Button(new Rect(Screen.width - 145f, 10f, 130f, 26f), "🎛️ Controls [C]"))
+                {
+                    isControlPanelOpen = true;
+                }
+                if (showMobileSimulator) DrawMobilePhoneSimulator();
+                return;
+            }
+
             GUILayout.BeginArea(new Rect(16, 55, 390, 195), GUI.skin.box);
             GUILayout.Label("<b>🌐 HOLOBRIDGE MULTI-DEVICE SPATIAL HUB</b>");
             GUILayout.Label($"<color=#7ab0d6>Camera Mode:</color> <color=#00e5ff>{currentCameraMode}</color>");
@@ -2794,7 +2811,15 @@ namespace HoloBridge.Collaboration
             float cadPanelY = 55f;
 
             GUILayout.BeginArea(new Rect(cadPanelX, cadPanelY, cadPanelW, cadPanelH), GUI.skin.box);
+            GUILayout.BeginHorizontal();
             GUILayout.Label("<b>🚀 AEROSPACE CAD & CONSENSUS CONSOLE</b>");
+            GUI.backgroundColor = new Color(1.0f, 0.35f, 0.35f);
+            if (GUILayout.Button("✕", GUILayout.Width(26), GUILayout.Height(20)))
+            {
+                isControlPanelOpen = false;
+            }
+            GUI.backgroundColor = Color.white;
+            GUILayout.EndHorizontal();
             var twin = SharedDigitalTwinAssembly.Instance;
             string modelName = twin != null ? twin.CurrentModelPreset.ToString() : "SpaceXRaptor3";
             string statusStr = twin != null && twin.IsProposalCommitted ? "<color=#00ff88>✅ LOCKED: +3.20mm (SAFE)</color>" : "<color=#ffaa00>⚠️ CLASH: Line 04 (0.00mm)</color>";

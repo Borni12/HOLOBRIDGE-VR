@@ -42,12 +42,15 @@
     gap: 8px;
   }
   .side-panel.collapsed {
+    display: none !important;
     margin-left: -375px;
     opacity: 0;
     pointer-events: none;
     visibility: hidden;
     width: 0;
     min-width: 0;
+    box-shadow: none !important;
+    border: none !important;
   }
   .main-column {
     flex: 1;
@@ -832,7 +835,10 @@
         <!-- Row 2: 1-Click Room & Environment Presets -->
         <div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; align-items:center;">
           <span style="font-size:10px; font-weight:bold; color:#cbd5e1; margin-right:4px;">🏛️ Room Setting:</span>
-          <button id="btnRoomHangar" class="cad-room-btn active" onclick="switchRoomTheme('hangar')">
+          <button id="btnRoomObservatory" class="cad-room-btn active" onclick="switchRoomTheme('observatory')">
+            🔭 XPI Observatory (New Default)
+          </button>
+          <button id="btnRoomHangar" class="cad-room-btn" onclick="switchRoomTheme('hangar')">
             🌌 Room 1: CyberHangar (Dark Obsidian Deck)
           </button>
           <button id="btnRoomCleanroom" class="cad-room-btn" onclick="switchRoomTheme('cleanroom')">
@@ -2093,7 +2099,7 @@
   let cadScene, cadCamera, cadRenderer, cadControls;
   let cadRoomGroup, cadModelGroup, cadPedestalGroup;
   let activeCadModelKey = 'raptor';
-  let activeCadRoomKey = 'hangar';
+  let activeCadRoomKey = 'observatory';
   let isCadExploded = false;
   let isCadXRay = false;
   let isCadAutoRotate = true;
@@ -2218,7 +2224,19 @@
 
     let bgColor, floorColor, gridColor1, gridColor2, lightColor, ambientIntensity;
 
-    if (roomKey === 'cleanroom') {
+    if (roomKey === 'observatory') {
+      bgColor = 0x040b16;
+      floorColor = 0x081526;
+      gridColor1 = 0x00f5d4;
+      gridColor2 = 0x164e63;
+      lightColor = 0x00f5d4;
+      ambientIntensity = 1.9;
+      cadAmbientLight.color.setHex(0x132a42);
+      cadAmbientLight.intensity = ambientIntensity;
+      cadDirLight.color.setHex(0x00f5d4);
+      cadDirLight.intensity = 1.7;
+      cadSecondaryLight.color.setHex(0x38bdf8);
+    } else if (roomKey === 'cleanroom') {
       bgColor = 0xf1f5f9;
       floorColor = 0xffffff;
       gridColor1 = 0x94a3b8;
@@ -2596,13 +2614,15 @@
   function switchRoomTheme(roomKey) {
     activeCadRoomKey = roomKey;
     document.querySelectorAll('.cad-room-btn').forEach(b => b.classList.remove('active'));
-    if (roomKey === 'hangar') document.getElementById('btnRoomHangar')?.classList.add('active');
+    if (roomKey === 'observatory') document.getElementById('btnRoomObservatory')?.classList.add('active');
+    else if (roomKey === 'hangar') document.getElementById('btnRoomHangar')?.classList.add('active');
     else if (roomKey === 'cleanroom') document.getElementById('btnRoomCleanroom')?.classList.add('active');
     else if (roomKey === 'mars') document.getElementById('btnRoomMars')?.classList.add('active');
 
     const roomBadge = document.getElementById('cadRoomBadge');
     if (roomBadge) {
-      if (roomKey === 'cleanroom') roomBadge.innerText = '⚪ Quantum Cleanroom';
+      if (roomKey === 'observatory') roomBadge.innerText = '🔭 XPI Observatory';
+      else if (roomKey === 'cleanroom') roomBadge.innerText = '⚪ Quantum Cleanroom';
       else if (roomKey === 'mars') roomBadge.innerText = '🪐 Mars Outpost Bay';
       else roomBadge.innerText = '🌌 CyberHangar';
     }

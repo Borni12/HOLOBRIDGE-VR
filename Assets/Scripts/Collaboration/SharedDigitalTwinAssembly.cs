@@ -162,6 +162,10 @@ namespace HoloBridge.Collaboration
             if (Input.GetKeyDown(KeyCode.N)) RejectProposal();
             if (Input.GetKeyDown(KeyCode.Z)) ToggleXRay();
             if (Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.X)) ToggleExplodedView();
+            if (Input.GetKeyDown(KeyCode.O)) ToggleOperationalTelemetry();
+            if (Input.GetKeyDown(KeyCode.C)) ToggleVRConsole(!isVRConsoleOpen);
+
+            UpdateXPIOperationalTelemetry();
         }
 
         public void SetModelPreset(int presetIndex)
@@ -316,6 +320,9 @@ namespace HoloBridge.Collaboration
 
             // In-World VR Holographic Mission Console (For Meta Quest 3, XR controllers & PC clicking)
             BuildWorldSpaceVRConsole(litShader);
+
+            // TXST XPI Lab Operational Interface & Live Digital Twin Telemetry Overlay
+            BuildXPIOperationalTelemetryHUD();
 
             UpdatePartPositions();
             UpdateMaterials();
@@ -1242,13 +1249,21 @@ namespace HoloBridge.Collaboration
         }
         #endregion
 
-        #region VR World-Space Holographic Mission Console
+        #region VR World-Space Holographic Mission Console & XPI Operational Telemetry
         private GameObject vrConsoleRoot;
+        private GameObject vrConsoleReopenBtn;
+        private bool isVRConsoleOpen = true;
         private TextMesh consoleStatusTextMesh;
+
+        private GameObject xpiTelemetryRoot;
+        private TextMesh xpiTelemetryTextMesh;
+        private bool isOperationalTelemetryVisible = true;
+        private float telemetryUpdateTimer = 0f;
 
         private void BuildWorldSpaceVRConsole(Shader litShader)
         {
             if (vrConsoleRoot != null) Destroy(vrConsoleRoot);
+            if (vrConsoleReopenBtn != null) Destroy(vrConsoleReopenBtn);
 
             vrConsoleRoot = new GameObject("VR_Aerospace_HoloConsole");
             vrConsoleRoot.transform.SetParent(assemblyRoot, false);
@@ -1256,7 +1271,7 @@ namespace HoloBridge.Collaboration
             vrConsoleRoot.transform.localPosition = new Vector3(0.92f, 0.15f, -0.15f);
             vrConsoleRoot.transform.localRotation = Quaternion.Euler(0f, -28f, 0f);
 
-            // Floating Glass Backplate
+            // Floating Glass Backplate (Zero shadow casting so closing or viewing never leaves stray shadows)
             GameObject backplate = GameObject.CreatePrimitive(PrimitiveType.Quad);
             backplate.name = "Console_GlassBackplate";
             backplate.transform.SetParent(vrConsoleRoot.transform, false);
@@ -1268,18 +1283,24 @@ namespace HoloBridge.Collaboration
                 new Color(0.05f, 0.08f, 0.14f, 0.94f),
                 new Color(0.0f, 0.95f, 1.0f, 0.8f)
             );
-            backplate.GetComponent<Renderer>().material = glassMat;
+            var backRend = backplate.GetComponent<Renderer>();
+            backRend.material = glassMat;
+            backRend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            backRend.receiveShadows = false;
 
             // Header Text
             GameObject headerObj = new GameObject("Console_Header");
             headerObj.transform.SetParent(vrConsoleRoot.transform, false);
-            headerObj.transform.localPosition = new Vector3(0f, 0.28f, -0.015f);
+            headerObj.transform.localPosition = new Vector3(-0.04f, 0.28f, -0.015f);
             var tm = headerObj.AddComponent<TextMesh>();
             tm.text = "🚀 AEROSPACE CAD CONSOLE";
             tm.fontSize = 24;
             tm.characterSize = 0.014f;
             tm.anchor = TextAnchor.MiddleCenter;
             tm.color = new Color(0.0f, 0.95f, 1.0f);
+
+            // Close Control Panel Button (Top-Right)
+            CreateConsoleButton("✕", new Vector3(0.39f, 0.28f, -0.02f), new Vector2(0.08f, 0.06f), () => ToggleVRConsole(false), new Color(1.0f, 0.30f, 0.35f));
 
             // Status Text
             GameObject statusObj = new GameObject("Console_Status");
@@ -1296,24 +1317,167 @@ namespace HoloBridge.Collaboration
             CreateConsoleButton("⚡ Ion Thruster", new Vector3(0f, 0.10f, -0.02f), new Vector2(0.26f, 0.07f), () => SetModelPreset(1), new Color(0.2f, 0.85f, 1.0f));
             CreateConsoleButton("⚙️ Turbopump", new Vector3(0.28f, 0.10f, -0.02f), new Vector2(0.26f, 0.07f), () => SetModelPreset(2), new Color(0.3f, 0.95f, 0.6f));
 
-            CreateConsoleButton("🏛️ Cleanroom", new Vector3(-0.28f, 0.00f, -0.02f), new Vector2(0.26f, 0.07f), () => MetaverseEnvironmentManager.Instance?.ToggleCleanRoom(), new Color(0.8f, 0.45f, 1.0f));
+            CreateConsoleButton("🔭 XPI Env", new Vector3(-0.28f, 0.00f, -0.02f), new Vector2(0.26f, 0.07f), () => MetaverseEnvironmentManager.Instance?.NextTheme(), new Color(0.8f, 0.45f, 1.0f));
             CreateConsoleButton("💥 Explode", new Vector3(0f, 0.00f, -0.02f), new Vector2(0.26f, 0.07f), () => ToggleExplodedView(), new Color(1.0f, 0.65f, 0.15f));
             CreateConsoleButton("👁️ X-Ray", new Vector3(0.28f, 0.00f, -0.02f), new Vector2(0.26f, 0.07f), () => ToggleXRay(), new Color(0.2f, 0.85f, 1.0f));
 
             // Big Consensus Buttons (Row 3)
-            CreateConsoleButton("✅ AGREE [Commit]", new Vector3(-0.20f, -0.14f, -0.02f), new Vector2(0.38f, 0.09f), () => CommitProposal(), new Color(0.0f, 1.0f, 0.55f));
-            CreateConsoleButton("❌ DISAGREE [Revert]", new Vector3(0.20f, -0.14f, -0.02f), new Vector2(0.38f, 0.09f), () => RejectProposal(), new Color(1.0f, 0.35f, 0.35f));
+            CreateConsoleButton("✅ AGREE [Commit]", new Vector3(-0.20f, -0.12f, -0.02f), new Vector2(0.38f, 0.08f), () => CommitProposal(), new Color(0.0f, 1.0f, 0.55f));
+            CreateConsoleButton("❌ DISAGREE [Revert]", new Vector3(0.20f, -0.12f, -0.02f), new Vector2(0.38f, 0.08f), () => RejectProposal(), new Color(1.0f, 0.35f, 0.35f));
+
+            // XPI Operational Telemetry Toggle (Row 4)
+            CreateConsoleButton("📊 XPI Telemetry [O]", new Vector3(0f, -0.21f, -0.02f), new Vector2(0.45f, 0.06f), () => ToggleOperationalTelemetry(), new Color(0.0f, 0.95f, 0.85f));
 
             // Footer Hint
             GameObject footerObj = new GameObject("Console_Footer");
             footerObj.transform.SetParent(vrConsoleRoot.transform, false);
-            footerObj.transform.localPosition = new Vector3(0f, -0.26f, -0.015f);
+            footerObj.transform.localPosition = new Vector3(0f, -0.29f, -0.015f);
             var footTm = footerObj.AddComponent<TextMesh>();
-            footTm.text = "VR: Aim Controller Laser or Poke with Finger • PC: Keys 1,2,3,R,Y,N,X,Z";
+            footTm.text = "VR: Aim Laser or Poke • PC: 1,2,3,T,Y,N,X,Z,O,C";
             footTm.fontSize = 14;
             footTm.characterSize = 0.009f;
             footTm.anchor = TextAnchor.MiddleCenter;
             footTm.color = new Color(0.45f, 0.55f, 0.65f);
+
+            // Reopen Pill (Shown ONLY when Control Panel is closed; casts NO shadow)
+            vrConsoleReopenBtn = new GameObject("VR_Console_ReopenPill");
+            vrConsoleReopenBtn.transform.SetParent(assemblyRoot, false);
+            vrConsoleReopenBtn.transform.localPosition = new Vector3(0.92f, -0.22f, -0.15f);
+            vrConsoleReopenBtn.transform.localRotation = Quaternion.Euler(0f, -28f, 0f);
+            var reopenBtn = vrConsoleReopenBtn.AddComponent<SpatialButton3D>();
+            reopenBtn.ButtonText = "🎛️ Open Controls";
+            reopenBtn.SetSize(0.28f, 0.065f);
+            reopenBtn.SetColors(new Color(0.06f, 0.10f, 0.16f, 0.92f), new Color(0.0f, 0.95f, 0.85f));
+            reopenBtn.onClick.AddListener(() => ToggleVRConsole(true));
+
+            ToggleVRConsole(isVRConsoleOpen);
+        }
+
+        public void ToggleVRConsole(bool open)
+        {
+            isVRConsoleOpen = open;
+            if (vrConsoleRoot != null)
+            {
+                vrConsoleRoot.SetActive(open);
+                foreach (var r in vrConsoleRoot.GetComponentsInChildren<Renderer>(true))
+                {
+                    r.enabled = open;
+                    r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                }
+            }
+            if (vrConsoleReopenBtn != null)
+            {
+                vrConsoleReopenBtn.SetActive(!open);
+            }
+        }
+
+        public void ToggleOperationalTelemetry()
+        {
+            isOperationalTelemetryVisible = !isOperationalTelemetryVisible;
+            if (xpiTelemetryRoot != null)
+            {
+                xpiTelemetryRoot.SetActive(isOperationalTelemetryVisible);
+                foreach (var r in xpiTelemetryRoot.GetComponentsInChildren<Renderer>(true))
+                {
+                    r.enabled = isOperationalTelemetryVisible;
+                    r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                }
+            }
+            OmniOSManager.Instance?.ShowNotificationToast(isOperationalTelemetryVisible
+                ? "📊 XPI Operational Telemetry Overlay: ON"
+                : "📊 XPI Operational Telemetry Overlay: OFF");
+        }
+
+        private void BuildXPIOperationalTelemetryHUD()
+        {
+            if (xpiTelemetryRoot != null) Destroy(xpiTelemetryRoot);
+
+            xpiTelemetryRoot = new GameObject("XPI_Operational_Telemetry_HUD");
+            xpiTelemetryRoot.transform.SetParent(assemblyRoot, false);
+            xpiTelemetryRoot.transform.localPosition = new Vector3(-0.82f, 0.18f, -0.12f);
+            xpiTelemetryRoot.transform.localRotation = Quaternion.Euler(0f, 24f, 0f);
+
+            GameObject backplate = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            backplate.name = "Telemetry_GlassBackplate";
+            backplate.transform.SetParent(xpiTelemetryRoot.transform, false);
+            backplate.transform.localScale = new Vector3(0.72f, 0.44f, 1f);
+            foreach (var c in backplate.GetComponents<Collider>()) Destroy(c);
+
+            var glassMat = SpatialTheme.CreateGlassMaterial(
+                new Color(0.04f, 0.08f, 0.13f, 0.90f),
+                new Color(0.0f, 0.95f, 0.85f, 0.75f)
+            );
+            var backRend = backplate.GetComponent<Renderer>();
+            backRend.material = glassMat;
+            backRend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            backRend.receiveShadows = false;
+
+            GameObject textObj = new GameObject("XPI_Telemetry_Text");
+            textObj.transform.SetParent(xpiTelemetryRoot.transform, false);
+            textObj.transform.localPosition = new Vector3(0f, 0f, -0.015f);
+            xpiTelemetryTextMesh = textObj.AddComponent<TextMesh>();
+            xpiTelemetryTextMesh.fontSize = 18;
+            xpiTelemetryTextMesh.characterSize = 0.0115f;
+            xpiTelemetryTextMesh.anchor = TextAnchor.MiddleCenter;
+            xpiTelemetryTextMesh.alignment = TextAlignment.Left;
+            xpiTelemetryTextMesh.color = Color.white;
+
+            xpiTelemetryRoot.SetActive(isOperationalTelemetryVisible);
+            UpdateXPIOperationalTelemetry(true);
+        }
+
+        private void UpdateXPIOperationalTelemetry(bool force = false)
+        {
+            if (!isOperationalTelemetryVisible || xpiTelemetryTextMesh == null) return;
+            if (!force)
+            {
+                telemetryUpdateTimer += Time.deltaTime;
+                if (telemetryUpdateTimer < 0.25f) return;
+                telemetryUpdateTimer = 0f;
+            }
+
+            float jitter = Mathf.Sin(Time.time * 3.1f);
+            string clearanceLine = isProposalCommitted
+                ? "<color=#00ff88>CLEARANCE: +3.20 mm (NOMINAL)</color>"
+                : "<color=#ffaa00>CLEARANCE: 0.00 mm (CLASH ⚠️)</color>";
+
+            switch (currentModelPreset)
+            {
+                case ModelPreset.NASAIonThruster:
+                    float volts = 3200f + jitter * 12f;
+                    float flux = 98.4f + jitter * 0.2f;
+                    xpiTelemetryTextMesh.text =
+                        "<color=#00f0ff><b>TXST XPI • OPERATIONAL TWIN</b></color>\n" +
+                        $"DISCHARGE: <color=#00ff88>{volts:F0} V</color>\n" +
+                        $"PLASMA FLUX: <color=#00f0ff>{flux:F1}%</color>\n" +
+                        $"SPECIFIC IMPULSE: 4,100 s\n" +
+                        clearanceLine;
+                    break;
+
+                case ModelPreset.CryoTurbopump:
+                    float loxBar = 300f + jitter * 1.8f;
+                    float cryoK = 92.4f + jitter * 0.1f;
+                    float cryoRpm = 28400f + jitter * 85f;
+                    xpiTelemetryTextMesh.text =
+                        "<color=#00f0ff><b>TXST XPI • OPERATIONAL TWIN</b></color>\n" +
+                        $"LOX PRESSURE: <color=#00ff88>{loxBar:F1} Bar</color>\n" +
+                        $"CRYO TEMP: <color=#00f0ff>{cryoK:F1} K</color>\n" +
+                        $"INDUCER RPM: {cryoRpm:N0}\n" +
+                        clearanceLine;
+                    break;
+
+                default: // SpaceX Raptor 3
+                    float bar = 350f + jitter * 2.1f;
+                    float tempK = 3420f + jitter * 14f;
+                    float rpm = 36200f + jitter * 110f;
+                    xpiTelemetryTextMesh.text =
+                        "<color=#00f0ff><b>TXST XPI • OPERATIONAL TWIN</b></color>\n" +
+                        $"CHAMBER: <color=#00ff88>{bar:F1} Bar</color>\n" +
+                        $"NOZZLE TEMP: <color=#ffaa00>{tempK:F0} K</color>\n" +
+                        $"TURBO RPM: {rpm:N0}\n" +
+                        clearanceLine;
+                    break;
+            }
         }
 
         private void CreateConsoleButton(string label, Vector3 localPos, Vector2 size, Action onClick, Color accentCol)

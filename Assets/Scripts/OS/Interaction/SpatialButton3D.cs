@@ -73,7 +73,10 @@ namespace OmniOS.Interaction
             if (mc != null) DestroyImmediate(mc);
 
             buttonMaterial = SpatialTheme.CreateGlassMaterial(baseColor, hoverColor);
-            visualBackplate.GetComponent<Renderer>().material = buttonMaterial;
+            var btnRenderer = visualBackplate.GetComponent<Renderer>();
+            btnRenderer.material = buttonMaterial;
+            btnRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            btnRenderer.receiveShadows = false;
 
             // 2. 3D Text Label
             GameObject textObj = new GameObject("Button_Label");
